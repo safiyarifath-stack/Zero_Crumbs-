@@ -3,10 +3,10 @@
   "appId": "1:835605899160:web:66a779a5897e5bef65aded",
   "apiKey": "AIzaSyBAHBCluoVEjQgOmsrzsrN_F4zIdFLkG78",
   "authDomain": "hopeful-folio-40z9n.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-60e89dcc-9bb3-4771-a7b0-c89e6ec6182e",
   "storageBucket": "hopeful-folio-40z9n.firebasestorage.app",
   "messagingSenderId": "835605899160",
   "measurementId": "",
   "oAuthClientId": "835605899160-n6uanjp9pl9ri17rcu697jccknbph9b8.apps.googleusercontent.com",
-  "recaptchaSiteKey": "",
-  "firestoreDatabaseId": "ai-studio-60e89dcc-9bb3-4771-a7b0-c89e6ec6182e"
+  "recaptchaSiteKey": ""
 }
