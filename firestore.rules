@@ -1,0 +1,395 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'phone' ||
+        (request.auth.token.phone_number is string && request.auth.token.phone_number.size() >= 8)
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function hasValidParentProfile(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+    }
+
+    function isValidImageUrl(url) {
+      return url is string &&
+        url.size() >= 1 &&
+        url.size() <= 100000 &&
+        url.matches('^(https://[^\\s]+|/src/assets/images/[a-zA-Z0-9_.-]+\\.jpg|data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+)$');
+    }
+
+    function isValidDateStr(d) {
+      return d is string && d.size() == 10 && d.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidUnit(u) {
+      return u in ['g', 'kg', 'ml', 'l', 'pcs', 'packs', 'cups', 'tbsp', 'bottles', 'cans'];
+    }
+
+    function isValidCategory(c) {
+      return c in ['Produce', 'Dairy & Eggs', 'Bakery', 'Grains & Pantry', 'Proteins', 'Prepared Meals', 'Beverages', 'Frozen', 'Other'];
+    }
+
+    function isValidLocation(loc) {
+      return loc in ['Fridge', 'Freezer', 'Pantry'];
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'fullName', 'username', 'email', 'householdSize',
+        'defaultLocation', 'reminderDaysBefore', 'browserNotificationsEnabled',
+        'emailRemindersEnabled', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'fullName', 'username', 'email', 'phoneNumber', 'householdSize',
+        'defaultLocation', 'reminderDaysBefore', 'browserNotificationsEnabled',
+        'emailRemindersEnabled', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.uid) &&
+      data.uid == userId &&
+      data.uid == request.auth.uid &&
+      data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+      data.username is string && data.username.size() >= 2 && data.username.size() <= 40 && data.username.matches('^[a-zA-Z0-9_.-]+$') &&
+      data.email is string && data.email.size() <= 160 &&
+      (data.email.size() >= 3 || ('phoneNumber' in data.keys() && data.phoneNumber is string && data.phoneNumber.size() >= 8)) &&
+      (!('phoneNumber' in data.keys()) || (data.phoneNumber is string && data.phoneNumber.size() <= 20 && data.phoneNumber.matches('^(\\+[1-9]\\d{6,14})?$'))) &&
+      data.householdSize is int && data.householdSize >= 1 && data.householdSize <= 20 &&
+      isValidLocation(data.defaultLocation) &&
+      data.reminderDaysBefore is int && data.reminderDaysBefore >= 1 && data.reminderDaysBefore <= 14 &&
+      data.browserNotificationsEnabled is bool &&
+      data.emailRemindersEnabled is bool &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidFoodItem(data, foodId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'name', 'category', 'quantity', 'initialQuantity',
+        'unit', 'location', 'expiryDate', 'imageUrl', 'notes', 'status',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'name', 'category', 'quantity', 'initialQuantity',
+        'unit', 'location', 'expiryDate', 'imageUrl', 'notes', 'status',
+        'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.id) && data.id == foodId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+      isValidCategory(data.category) &&
+      (data.quantity is int || data.quantity is float) && data.quantity >= 0 && data.quantity <= 1000000 &&
+      (data.initialQuantity is int || data.initialQuantity is float) && data.initialQuantity > 0 && data.initialQuantity <= 1000000 &&
+      isValidUnit(data.unit) &&
+      isValidLocation(data.location) &&
+      isValidDateStr(data.expiryDate) &&
+      isValidImageUrl(data.imageUrl) &&
+      data.notes is string && data.notes.size() <= 500 &&
+      data.status in ['active', 'consumed', 'wasted', 'donated'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidQuantityHistory(data, entryId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'foodId', 'foodName', 'changeType', 'delta',
+        'previousQuantity', 'newQuantity', 'unit', 'note', 'source', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'foodId', 'foodName', 'changeType', 'delta',
+        'previousQuantity', 'newQuantity', 'unit', 'note', 'source', 'createdAt'
+      ]) &&
+      isValidId(data.id) && data.id == entryId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      isValidId(data.foodId) &&
+      data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 120 &&
+      data.changeType in ['added', 'used', 'increased', 'adjusted', 'completed', 'wasted', 'donated'] &&
+      (data.delta is int || data.delta is float) &&
+      (data.previousQuantity is int || data.previousQuantity is float) && data.previousQuantity >= 0 &&
+      (data.newQuantity is int || data.newQuantity is float) && data.newQuantity >= 0 &&
+      isValidUnit(data.unit) &&
+      data.note is string && data.note.size() <= 300 &&
+      data.source in ['manual', 'ai'] &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidDonationListing(data, donationId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'foodId', 'foodName', 'quantity', 'unit', 'category',
+        'expiryDate', 'imageUrl', 'pickupLocation', 'contactInfo', 'notes',
+        'status', 'charityPartner', 'safetyConfirmed', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'foodId', 'foodName', 'quantity', 'unit', 'category',
+        'expiryDate', 'imageUrl', 'pickupLocation', 'contactInfo', 'notes',
+        'status', 'charityPartner', 'safetyConfirmed', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.id) && data.id == donationId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      isValidId(data.foodId) &&
+      data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 120 &&
+      (data.quantity is int || data.quantity is float) && data.quantity > 0 && data.quantity <= 1000000 &&
+      isValidUnit(data.unit) &&
+      isValidCategory(data.category) &&
+      isValidDateStr(data.expiryDate) &&
+      isValidImageUrl(data.imageUrl) &&
+      data.pickupLocation is string && data.pickupLocation.size() >= 2 && data.pickupLocation.size() <= 200 &&
+      data.contactInfo is string && data.contactInfo.size() >= 3 && data.contactInfo.size() <= 150 &&
+      data.notes is string && data.notes.size() <= 500 &&
+      data.status in ['Available', 'Requested', 'Approved', 'Collected', 'Donated', 'Cancelled'] &&
+      data.charityPartner is string && data.charityPartner.size() <= 120 &&
+      data.safetyConfirmed is bool && data.safetyConfirmed == true &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidDonationRequest(data, requestId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'donationId', 'foodName', 'requesterName', 'organizationType',
+        'requestedQuantity', 'unit', 'pickupWindow', 'message', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'donationId', 'foodName', 'requesterName', 'organizationType',
+        'requestedQuantity', 'unit', 'pickupWindow', 'message', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.id) && data.id == requestId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      isValidId(data.donationId) &&
+      data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 120 &&
+      data.requesterName is string && data.requesterName.size() >= 2 && data.requesterName.size() <= 120 &&
+      data.organizationType in ['Community Pantry', 'Food Bank', 'Shelter', 'Verified NGO', 'Local Volunteer'] &&
+      (data.requestedQuantity is int || data.requestedQuantity is float) && data.requestedQuantity > 0 &&
+      isValidUnit(data.unit) &&
+      data.pickupWindow is string && data.pickupWindow.size() >= 2 && data.pickupWindow.size() <= 120 &&
+      data.message is string && data.message.size() <= 400 &&
+      data.status in ['Pending', 'Approved', 'Collected', 'Declined'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data, logId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'action', 'itemName', 'details', 'source', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'action', 'itemName', 'details', 'source', 'createdAt'
+      ]) &&
+      isValidId(data.id) && data.id == logId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      data.action in [
+        'food_added', 'food_edited', 'quantity_increased', 'quantity_decreased',
+        'food_consumed', 'food_wasted', 'food_deleted', 'donation_created',
+        'donation_updated', 'donation_completed', 'donation_cancelled',
+        'ai_action', 'settings_updated'
+      ] &&
+      data.itemName is string && data.itemName.size() >= 1 && data.itemName.size() <= 140 &&
+      data.details is string && data.details.size() <= 400 &&
+      data.source in ['user', 'ai'] &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidAiActionRecord(data, actionId, userId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'instruction', 'actionType', 'summary', 'status', 'errorMessage', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'instruction', 'actionType', 'summary', 'status', 'errorMessage', 'createdAt'
+      ]) &&
+      isValidId(data.id) && data.id == actionId &&
+      isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
+      data.instruction is string && data.instruction.size() >= 1 && data.instruction.size() <= 500 &&
+      data.actionType is string && data.actionType.size() >= 1 && data.actionType.size() <= 60 &&
+      data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 400 &&
+      data.status in ['confirmed', 'failed', 'cancelled'] &&
+      data.errorMessage is string && data.errorMessage.size() <= 300 &&
+      data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'fullName', 'username', 'email', 'phoneNumber', 'householdSize',
+          'defaultLocation', 'reminderDaysBefore', 'browserNotificationsEnabled',
+          'emailRemindersEnabled', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /foods/{foodId} {
+        allow get: if isValidId(userId) && isValidId(foodId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(foodId) &&
+          isValidFoodItem(incoming(), foodId, userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId);
+        allow update: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(foodId) &&
+          isOwner(userId) &&
+          isValidFoodItem(incoming(), foodId, userId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId) &&
+          (
+            // Action: Edit food details
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'category', 'quantity', 'initialQuantity', 'unit',
+              'location', 'expiryDate', 'imageUrl', 'notes', 'status', 'updatedAt'
+            ]) ||
+            // Action: Quick quantity / status adjustment
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'quantity', 'status', 'updatedAt'
+            ])
+          );
+        allow delete: if isVerifiedUser() && isValidId(userId) && isValidId(foodId) && isOwner(userId) && hasValidParentProfile(userId);
+      }
+
+      match /quantityHistory/{entryId} {
+        allow get: if isValidId(userId) && isValidId(entryId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(entryId) &&
+          isValidQuantityHistory(incoming(), entryId, userId) &&
+          incoming().createdAt == request.time &&
+          hasValidParentProfile(userId);
+        allow update, delete: if false;
+      }
+
+      match /donations/{donationId} {
+        allow get: if isValidId(userId) && isValidId(donationId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(donationId) &&
+          isValidDonationListing(incoming(), donationId, userId) &&
+          incoming().status == 'Available' &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId);
+        allow update: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(donationId) &&
+          isOwner(userId) &&
+          isValidDonationListing(incoming(), donationId, userId) &&
+          !(existing().status in ['Donated', 'Cancelled']) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId) &&
+          (
+            // Action: Edit donation details
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'foodName', 'quantity', 'unit', 'category', 'expiryDate',
+              'imageUrl', 'pickupLocation', 'contactInfo', 'notes', 'charityPartner', 'updatedAt'
+            ]) ||
+            // Action: Transition donation status
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'charityPartner', 'updatedAt'
+            ])
+          );
+        allow delete: if isVerifiedUser() && isValidId(userId) && isValidId(donationId) && isOwner(userId) && hasValidParentProfile(userId);
+      }
+
+      match /donationRequests/{requestId} {
+        allow get: if isValidId(userId) && isValidId(requestId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(requestId) &&
+          isValidDonationRequest(incoming(), requestId, userId) &&
+          incoming().status == 'Pending' &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)/donations/$(incoming().donationId));
+        allow update: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(requestId) &&
+          isOwner(userId) &&
+          isValidDonationRequest(incoming(), requestId, userId) &&
+          !(existing().status in ['Collected', 'Declined']) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().donationId == existing().donationId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasValidParentProfile(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /activityLogs/{logId} {
+        allow get: if isValidId(userId) && isValidId(logId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isValidActivityLog(incoming(), logId, userId) &&
+          incoming().createdAt == request.time &&
+          hasValidParentProfile(userId);
+        allow update, delete: if false;
+      }
+
+      match /aiActions/{actionId} {
+        allow get: if isValidId(userId) && isValidId(actionId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(actionId) &&
+          isValidAiActionRecord(incoming(), actionId, userId) &&
+          incoming().createdAt == request.time &&
+          hasValidParentProfile(userId);
+        allow update, delete: if false;
+      }
+    }
+  }
+}

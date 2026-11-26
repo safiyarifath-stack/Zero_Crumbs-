@@ -1,0 +1,580 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile and notification reminder preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "username": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 160,
+          "description": "User email address (may be empty for phone-only accounts)."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 20,
+          "pattern": "^(\\+[1-9]\\d{6,14})?$",
+          "description": "Verified E.164 phone number with country code."
+        },
+        "householdSize": {
+          "type": "integer",
+          "description": "Number of people in the household (1 to 20)."
+        },
+        "defaultLocation": {
+          "type": "string",
+          "enum": ["Fridge", "Freezer", "Pantry"]
+        },
+        "reminderDaysBefore": {
+          "type": "integer",
+          "description": "Days before expiry to alert user (1 to 14)."
+        },
+        "browserNotificationsEnabled": {
+          "type": "boolean"
+        },
+        "emailRemindersEnabled": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "fullName",
+        "username",
+        "email",
+        "householdSize",
+        "defaultLocation",
+        "reminderDaysBefore",
+        "browserNotificationsEnabled",
+        "emailRemindersEnabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FoodItem": {
+      "title": "FoodItem",
+      "description": "A food item stored in the user's household inventory.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Produce",
+            "Dairy & Eggs",
+            "Bakery",
+            "Grains & Pantry",
+            "Proteins",
+            "Prepared Meals",
+            "Beverages",
+            "Frozen",
+            "Other"
+          ]
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Remaining numeric quantity (>= 0)."
+        },
+        "initialQuantity": {
+          "type": "number",
+          "description": "Starting numeric quantity (> 0)."
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["g", "kg", "ml", "l", "pcs", "packs", "cups", "tbsp", "bottles", "cans"]
+        },
+        "location": {
+          "type": "string",
+          "enum": ["Fridge", "Freezer", "Pantry"]
+        },
+        "expiryDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "pattern": "^(https://[^\\s]+|/src/assets/images/[a-zA-Z0-9_.-]+\\.jpg|data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+)$"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "consumed", "wasted", "donated"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "category",
+        "quantity",
+        "initialQuantity",
+        "unit",
+        "location",
+        "expiryDate",
+        "imageUrl",
+        "notes",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "QuantityHistoryEntry": {
+      "title": "QuantityHistoryEntry",
+      "description": "Audit trail of quantity additions, consumption, and adjustments for a food item.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "foodId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "foodName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "changeType": {
+          "type": "string",
+          "enum": ["added", "used", "increased", "adjusted", "completed", "wasted", "donated"]
+        },
+        "delta": {
+          "type": "number"
+        },
+        "previousQuantity": {
+          "type": "number"
+        },
+        "newQuantity": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["g", "kg", "ml", "l", "pcs", "packs", "cups", "tbsp", "bottles", "cans"]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "source": {
+          "type": "string",
+          "enum": ["manual", "ai"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "foodId",
+        "foodName",
+        "changeType",
+        "delta",
+        "previousQuantity",
+        "newQuantity",
+        "unit",
+        "note",
+        "source",
+        "createdAt"
+      ]
+    },
+    "DonationListing": {
+      "title": "DonationListing",
+      "description": "Surplus non-expired food listing shared with verified charities or local NGOs.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "foodId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "foodName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["g", "kg", "ml", "l", "pcs", "packs", "cups", "tbsp", "bottles", "cans"]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Produce",
+            "Dairy & Eggs",
+            "Bakery",
+            "Grains & Pantry",
+            "Proteins",
+            "Prepared Meals",
+            "Beverages",
+            "Frozen",
+            "Other"
+          ]
+        },
+        "expiryDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "pattern": "^(https://[^\\s]+|/src/assets/images/[a-zA-Z0-9_.-]+\\.jpg|data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+)$"
+        },
+        "pickupLocation": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "contactInfo": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 150
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Available", "Requested", "Approved", "Collected", "Donated", "Cancelled"]
+        },
+        "charityPartner": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "safetyConfirmed": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "foodId",
+        "foodName",
+        "quantity",
+        "unit",
+        "category",
+        "expiryDate",
+        "imageUrl",
+        "pickupLocation",
+        "contactInfo",
+        "notes",
+        "status",
+        "charityPartner",
+        "safetyConfirmed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DonationRequest": {
+      "title": "DonationRequest",
+      "description": "Charity or community partner pickup request tied to a donation listing.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "donationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "foodName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "requesterName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "organizationType": {
+          "type": "string",
+          "enum": ["Community Pantry", "Food Bank", "Shelter", "Verified NGO", "Local Volunteer"]
+        },
+        "requestedQuantity": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["g", "kg", "ml", "l", "pcs", "packs", "cups", "tbsp", "bottles", "cans"]
+        },
+        "pickupWindow": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Approved", "Collected", "Declined"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "donationId",
+        "foodName",
+        "requesterName",
+        "organizationType",
+        "requestedQuantity",
+        "unit",
+        "pickupWindow",
+        "message",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Persistent audit log of all user and AI food/donation actions.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "food_added",
+            "food_edited",
+            "quantity_increased",
+            "quantity_decreased",
+            "food_consumed",
+            "food_wasted",
+            "food_deleted",
+            "donation_created",
+            "donation_updated",
+            "donation_completed",
+            "donation_cancelled",
+            "ai_action",
+            "settings_updated"
+          ]
+        },
+        "itemName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "source": {
+          "type": "string",
+          "enum": ["user", "ai"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "userId", "action", "itemName", "details", "source", "createdAt"]
+    },
+    "AiActionRecord": {
+      "title": "AiActionRecord",
+      "description": "Record of confirmed, cancelled, or failed actions executed by Zero Crumbs AI.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "actionType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "failed", "cancelled"]
+        },
+        "errorMessage": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "userId", "instruction", "actionType", "summary", "status", "errorMessage", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profile and reminder preferences."
+    },
+    "/users/{userId}/foods/{foodId}": {
+      "schema": { "$ref": "#/entities/FoodItem" },
+      "description": "User's private food inventory items."
+    },
+    "/users/{userId}/quantityHistory/{entryId}": {
+      "schema": { "$ref": "#/entities/QuantityHistoryEntry" },
+      "description": "Quantity consumption and adjustment history per food item."
+    },
+    "/users/{userId}/donations/{donationId}": {
+      "schema": { "$ref": "#/entities/DonationListing" },
+      "description": "User's surplus food donation listings."
+    },
+    "/users/{userId}/donationRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/DonationRequest" },
+      "description": "Pickup requests linked to user's donation listings."
+    },
+    "/users/{userId}/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Audit history of user and AI actions."
+    },
+    "/users/{userId}/aiActions/{actionId}": {
+      "schema": { "$ref": "#/entities/AiActionRecord" },
+      "description": "AI agent action execution records."
+    }
+  }
+}

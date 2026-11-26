@@ -1,0 +1,8 @@
+{
+  "name": "Zero Crumbs",
+  "description": "Save Food. Reduce Waste. Share Goodness. AI-powered household food inventory, expiry tracking, consumption management, and surplus donation platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
