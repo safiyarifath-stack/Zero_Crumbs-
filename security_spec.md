@@ -1,9 +1,9 @@
 # Zero Crumbs Security Specification
 
 ## 1. Data Invariants
-1. **Strict Tenant Isolation**: Every document in `/users/{userId}` and its subcollections (`foods`, `quantityHistory`, `donations`, `donationRequests`, `activityLogs`, `aiActions`) is strictly private to the authenticated, verified owner (`request.auth.uid == userId` and either `request.auth.token.email_verified == true` or verified Firebase Phone Auth `sign_in_provider == 'phone'`).
+1. **Strict Tenant Isolation**: Every document in `/users/{userId}` and its subcollections (`foods`, `quantityHistory`, `donations`, `donationRequests`, `activityLogs`, `aiActions`) is strictly private to the authenticated, verified owner (`request.auth.uid == userId` and either `request.auth.token.email_verified == true` or server-verified `emailOtpVerified == true`).
 2. **Master Gate Relational Sync**: Every subcollection read/write (`get`, `create`, `update`, `delete`) verifies that the parent `/users/{userId}` profile exists and belongs to `request.auth.uid`.
-3. **PII Isolation**: User email, phone number, pickup locations, and contact info reside strictly inside owner-only `/users/{userId}` paths. No cross-user read or `list` queries are permitted.
+3. **PII Isolation**: User email, phone number, donor contact phone (`donorPhone`), exact pickup coordinates/addresses (`pickupLatitude`, `pickupLongitude`, `pickupAddress`), and selected charity handoff details reside strictly inside owner-only `/users/{userId}` paths. No cross-user read or `list` queries are permitted, preventing unrelated users from accessing personal contact information.
 4. **Food Safety & Donation Terminal Locks**:
    - Donations require `safetyConfirmed == true` and valid non-empty quantity `> 0`.
    - Once a donation reaches a terminal state (`Donated` or `Cancelled`), no further updates are permitted.

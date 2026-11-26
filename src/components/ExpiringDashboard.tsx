@@ -368,10 +368,10 @@ export function ExpiringDashboard({
                 {!emailStatus.loaded
                   ? 'Checking email service configuration...'
                   : !(profile?.email || auth.currentUser?.email)
-                    ? 'No email linked to this phone-verified account. Use Browser Push Notifications above.'
+                    ? 'No email address linked to this account. Use Browser Push Notifications above.'
                     : emailStatus.emailConfigured
                       ? `Connected and ready for ${profile?.email || auth.currentUser?.email}.`
-                      : `Requires server environment secrets (${emailStatus.missingEnv.join(', ')}) to send real emails.`}
+                      : 'Requires server email delivery secrets (APPS_SCRIPT_EMAIL_URL or RESEND_API_KEY) in Settings > Secrets.'}
               </p>
             </div>
             <div className="flex items-center gap-2">

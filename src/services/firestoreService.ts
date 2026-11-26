@@ -28,6 +28,7 @@ import type {
   OrganizationType,
   PendingAiAction,
   QuantityHistoryEntry,
+  SelectedCharityOrganisation,
   StorageLocation,
   UserProfile,
 } from '../types';
@@ -44,51 +45,84 @@ function cleanUsername(raw: string): string {
   return cleaned.length >= 2 ? cleaned : `member_${Date.now().toString().slice(-4)}`;
 }
 
+const inFlightProfileEnsures = new Map<string, Promise<UserProfile>>();
+
+export async function getEmailOtpVerifiedStatus(uid: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (!snap.exists()) return false;
+    return snap.data()?.emailOtpVerified === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureUserProfile(
   user: User,
-  overrides?: { fullName?: string; username?: string; email?: string; phoneNumber?: string }
-): Promise<UserProfile> {
-  const path = `users/${user.uid}`;
-  try {
-    const ref = doc(db, 'users', user.uid);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      return snap.data() as UserProfile;
-    }
-
-    const rawEmail = (overrides?.email ?? user.email ?? '').trim().slice(0, 160);
-    const rawPhone = (overrides?.phoneNumber ?? user.phoneNumber ?? '').trim().slice(0, 20);
-    const email = rawEmail || (rawPhone ? '' : 'user@zerocrumbs.app');
-    const fallbackName =
-      email ? email.split('@')[0] : rawPhone ? `Member ${rawPhone.slice(-4)}` : 'Zero Crumbs Member';
-    const fullName = (overrides?.fullName || user.displayName || fallbackName).trim().slice(0, 100);
-    const username = cleanUsername(
-      overrides?.username || (email ? email.split('@')[0] : '') || (rawPhone ? `user_${rawPhone.slice(-6)}` : 'member')
-    );
-
-    const profileData: Record<string, unknown> = {
-      uid: user.uid,
-      fullName: fullName || 'Zero Crumbs Member',
-      username,
-      email,
-      householdSize: 2,
-      defaultLocation: 'Fridge' as StorageLocation,
-      reminderDaysBefore: 3,
-      browserNotificationsEnabled: false,
-      emailRemindersEnabled: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    if (rawPhone) {
-      profileData.phoneNumber = rawPhone;
-    }
-
-    await setDoc(ref, profileData);
-    const createdSnap = await getDoc(ref);
-    return createdSnap.data() as UserProfile;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+  overrides?: {
+    fullName?: string;
+    username?: string;
+    email?: string;
+    emailOtpVerified?: boolean;
   }
+): Promise<UserProfile> {
+  const existingPromise = inFlightProfileEnsures.get(user.uid);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const run = (async (): Promise<UserProfile> => {
+    const path = `users/${user.uid}`;
+    try {
+      const ref = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const existingData = snap.data() as UserProfile;
+        if (overrides?.emailOtpVerified && existingData.emailOtpVerified !== true) {
+          await updateDoc(ref, {
+            emailOtpVerified: true,
+            updatedAt: serverTimestamp(),
+          });
+          const refreshedSnap = await getDoc(ref);
+          return refreshedSnap.data() as UserProfile;
+        }
+        return existingData;
+      }
+
+      const email = (overrides?.email ?? user.email ?? '').trim().slice(0, 160) || 'user@zerocrumbs.app';
+      const fallbackName = email.split('@')[0] || 'Zero Crumbs Member';
+      const fullName = (overrides?.fullName || user.displayName || fallbackName).trim().slice(0, 100);
+      const username = cleanUsername(overrides?.username || email.split('@')[0] || 'member');
+
+      const profileData: Record<string, unknown> = {
+        uid: user.uid,
+        fullName: fullName || 'Zero Crumbs Member',
+        username,
+        email,
+        householdSize: 2,
+        defaultLocation: 'Fridge' as StorageLocation,
+        reminderDaysBefore: 3,
+        browserNotificationsEnabled: false,
+        emailRemindersEnabled: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (overrides?.emailOtpVerified || user.emailVerified) {
+        profileData.emailOtpVerified = true;
+      }
+
+      await setDoc(ref, profileData);
+      const createdSnap = await getDoc(ref);
+      return createdSnap.data() as UserProfile;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } finally {
+      inFlightProfileEnsures.delete(user.uid);
+    }
+  })();
+
+  inFlightProfileEnsures.set(user.uid, run);
+  return run;
 }
 
 export async function updateUserProfile(
@@ -99,7 +133,6 @@ export async function updateUserProfile(
       | 'fullName'
       | 'username'
       | 'email'
-      | 'phoneNumber'
       | 'householdSize'
       | 'defaultLocation'
       | 'reminderDaysBefore'
@@ -118,7 +151,6 @@ export async function updateUserProfile(
     if (updates.fullName !== undefined) payload.fullName = updates.fullName.trim().slice(0, 100);
     if (updates.username !== undefined) payload.username = cleanUsername(updates.username);
     if (updates.email !== undefined) payload.email = updates.email.trim().slice(0, 160);
-    if (updates.phoneNumber !== undefined) payload.phoneNumber = updates.phoneNumber.trim().slice(0, 20);
     if (updates.householdSize !== undefined)
       payload.householdSize = Math.min(20, Math.max(1, Math.round(updates.householdSize)));
     if (updates.defaultLocation !== undefined) payload.defaultLocation = updates.defaultLocation;
@@ -531,11 +563,50 @@ export interface CreateDonationInput {
   expiryDate: string;
   imageUrl?: string;
   pickupLocation: string;
+  pickupAddress?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  pickupPlaceId?: string;
   contactInfo: string;
+  donorPhone?: string;
   notes?: string;
   charityPartner?: string;
+  selectedOrganisation?: SelectedCharityOrganisation;
   safetyConfirmed: boolean;
   sourceFoodItem?: FoodItem | null;
+}
+
+function sanitizeSelectedOrganisation(
+  org?: SelectedCharityOrganisation | null
+): SelectedCharityOrganisation | undefined {
+  if (!org || !org.placeId || !org.name || !org.address) return undefined;
+  const lat = Number(org.latitude);
+  const lng = Number(org.longitude);
+  if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return undefined;
+  }
+  const cleaned: SelectedCharityOrganisation = {
+    placeId: org.placeId.trim().slice(0, 200),
+    name: org.name.trim().slice(0, 160),
+    address: org.address.trim().slice(0, 300),
+    latitude: lat,
+    longitude: lng,
+  };
+  if (org.phone && org.phone.trim()) cleaned.phone = org.phone.trim().slice(0, 40);
+  if (typeof org.distanceMeters === 'number' && !Number.isNaN(org.distanceMeters) && org.distanceMeters >= 0) {
+    cleaned.distanceMeters = Math.min(500000, Math.round(org.distanceMeters));
+  }
+  if (org.category && org.category.trim()) cleaned.category = org.category.trim().slice(0, 80);
+  if (org.googleMapsUri && /^https:\/\/[^\s]+$/i.test(org.googleMapsUri.trim())) {
+    cleaned.googleMapsUri = org.googleMapsUri.trim().slice(0, 500);
+  }
+  if (org.directionsUri && /^https:\/\/[^\s]+$/i.test(org.directionsUri.trim())) {
+    cleaned.directionsUri = org.directionsUri.trim().slice(0, 500);
+  }
+  if (org.websiteUri && /^https?:\/\/[^\s]+$/i.test(org.websiteUri.trim())) {
+    cleaned.websiteUri = org.websiteUri.trim().slice(0, 500);
+  }
+  return cleaned;
 }
 
 export async function createDonationListing(
@@ -560,8 +631,11 @@ export async function createDonationListing(
       input.imageUrl && input.imageUrl.trim().length > 0
         ? input.imageUrl.trim()
         : getRecommendedPresetImage(input.category, safeName);
+    const safePickupAddress = (input.pickupAddress || input.pickupLocation).trim().slice(0, 300);
+    const sanitizedOrg = sanitizeSelectedOrganisation(input.selectedOrganisation);
+    const partnerName = (input.charityPartner || sanitizedOrg?.name || '').trim().slice(0, 160);
 
-    batch.set(doc(db, 'users', userId, 'donations', donationId), {
+    const docPayload: Record<string, unknown> = {
       id: donationId,
       userId,
       foodId: input.foodId || input.sourceFoodItem?.id || 'standalone',
@@ -571,15 +645,46 @@ export async function createDonationListing(
       category: input.category,
       expiryDate: input.expiryDate,
       imageUrl,
-      pickupLocation: input.pickupLocation.trim().slice(0, 200),
+      pickupLocation: safePickupAddress,
       contactInfo: input.contactInfo.trim().slice(0, 150),
       notes: (input.notes || '').trim().slice(0, 500),
       status: 'Available' satisfies DonationStatus,
-      charityPartner: (input.charityPartner || '').trim().slice(0, 120),
+      charityPartner: partnerName,
       safetyConfirmed: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (safePickupAddress.length >= 2) {
+      docPayload.pickupAddress = safePickupAddress;
+    }
+    if (
+      typeof input.pickupLatitude === 'number' &&
+      !Number.isNaN(input.pickupLatitude) &&
+      input.pickupLatitude >= -90 &&
+      input.pickupLatitude <= 90
+    ) {
+      docPayload.pickupLatitude = input.pickupLatitude;
+    }
+    if (
+      typeof input.pickupLongitude === 'number' &&
+      !Number.isNaN(input.pickupLongitude) &&
+      input.pickupLongitude >= -180 &&
+      input.pickupLongitude <= 180
+    ) {
+      docPayload.pickupLongitude = input.pickupLongitude;
+    }
+    if (input.pickupPlaceId && input.pickupPlaceId.trim()) {
+      docPayload.pickupPlaceId = input.pickupPlaceId.trim().slice(0, 200);
+    }
+    if (input.donorPhone && input.donorPhone.trim()) {
+      docPayload.donorPhone = input.donorPhone.trim().slice(0, 25);
+    }
+    if (sanitizedOrg) {
+      docPayload.selectedOrganisation = sanitizedOrg;
+    }
+
+    batch.set(doc(db, 'users', userId, 'donations', donationId), docPayload);
 
     if (input.sourceFoodItem) {
       const srcFood = input.sourceFoodItem;
@@ -639,9 +744,15 @@ export async function updateDonationDetails(
       | 'expiryDate'
       | 'imageUrl'
       | 'pickupLocation'
+      | 'pickupAddress'
+      | 'pickupLatitude'
+      | 'pickupLongitude'
+      | 'pickupPlaceId'
       | 'contactInfo'
+      | 'donorPhone'
       | 'notes'
       | 'charityPartner'
+      | 'selectedOrganisation'
     >
   >
 ): Promise<void> {
@@ -652,19 +763,63 @@ export async function updateDonationDetails(
   }
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db, 'users', userId, 'donations', donation.id), {
+    const nextPickupLocation = (updates.pickupLocation ?? donation.pickupLocation)
+      .trim()
+      .slice(0, 300);
+    const nextPickupAddress = (
+      updates.pickupAddress ??
+      donation.pickupAddress ??
+      nextPickupLocation
+    )
+      .trim()
+      .slice(0, 300);
+    const sanitizedOrg = sanitizeSelectedOrganisation(
+      updates.selectedOrganisation !== undefined
+        ? updates.selectedOrganisation
+        : donation.selectedOrganisation
+    );
+    const nextPartner = (updates.charityPartner ?? sanitizedOrg?.name ?? donation.charityPartner)
+      .trim()
+      .slice(0, 160);
+
+    const updatePayload: Record<string, unknown> = {
       foodName: (updates.foodName ?? donation.foodName).trim().slice(0, 120),
       quantity: Math.max(0.01, Number(updates.quantity ?? donation.quantity)),
       unit: updates.unit ?? donation.unit,
       category: updates.category ?? donation.category,
       expiryDate: exp,
       imageUrl: updates.imageUrl ?? donation.imageUrl,
-      pickupLocation: (updates.pickupLocation ?? donation.pickupLocation).trim().slice(0, 200),
+      pickupLocation: nextPickupLocation,
       contactInfo: (updates.contactInfo ?? donation.contactInfo).trim().slice(0, 150),
       notes: (updates.notes ?? donation.notes).trim().slice(0, 500),
-      charityPartner: (updates.charityPartner ?? donation.charityPartner).trim().slice(0, 120),
+      charityPartner: nextPartner,
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (nextPickupAddress.length >= 2) {
+      updatePayload.pickupAddress = nextPickupAddress;
+    }
+    const nextLat = updates.pickupLatitude ?? donation.pickupLatitude;
+    const nextLng = updates.pickupLongitude ?? donation.pickupLongitude;
+    if (typeof nextLat === 'number' && !Number.isNaN(nextLat) && nextLat >= -90 && nextLat <= 90) {
+      updatePayload.pickupLatitude = nextLat;
+    }
+    if (typeof nextLng === 'number' && !Number.isNaN(nextLng) && nextLng >= -180 && nextLng <= 180) {
+      updatePayload.pickupLongitude = nextLng;
+    }
+    const nextPlaceId = updates.pickupPlaceId ?? donation.pickupPlaceId;
+    if (nextPlaceId && nextPlaceId.trim()) {
+      updatePayload.pickupPlaceId = nextPlaceId.trim().slice(0, 200);
+    }
+    const nextPhone = updates.donorPhone ?? donation.donorPhone;
+    if (nextPhone && nextPhone.trim()) {
+      updatePayload.donorPhone = nextPhone.trim().slice(0, 25);
+    }
+    if (sanitizedOrg) {
+      updatePayload.selectedOrganisation = sanitizedOrg;
+    }
+
+    batch.update(doc(db, 'users', userId, 'donations', donation.id), updatePayload);
 
     const logId = sanitizeIdSegment('log');
     batch.set(doc(db, 'users', userId, 'activityLogs', logId), {

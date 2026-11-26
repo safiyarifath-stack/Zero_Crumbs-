@@ -23,21 +23,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isVerifiedUser() {
-      return isSignedIn() && (
-        request.auth.token.email_verified == true ||
-        request.auth.token.firebase.sign_in_provider == 'phone' ||
-        (request.auth.token.phone_number is string && request.auth.token.phone_number.size() >= 8)
-      );
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     function hasValidParentProfile(userId) {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
-        get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+        get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid &&
+        (
+          request.auth.token.email_verified == true ||
+          ('emailOtpVerified' in get(/databases/$(database)/documents/users/$(userId)).data.keys() &&
+           get(/databases/$(database)/documents/users/$(userId)).data.emailOtpVerified == true)
+        );
     }
 
     function isValidImageUrl(url) {
@@ -73,7 +66,7 @@ service cloud.firestore {
       data.keys().hasOnly([
         'uid', 'fullName', 'username', 'email', 'phoneNumber', 'householdSize',
         'defaultLocation', 'reminderDaysBefore', 'browserNotificationsEnabled',
-        'emailRemindersEnabled', 'createdAt', 'updatedAt'
+        'emailRemindersEnabled', 'emailOtpVerified', 'createdAt', 'updatedAt'
       ]) &&
       isValidId(data.uid) &&
       data.uid == userId &&
@@ -83,6 +76,7 @@ service cloud.firestore {
       data.email is string && data.email.size() <= 160 &&
       (data.email.size() >= 3 || ('phoneNumber' in data.keys() && data.phoneNumber is string && data.phoneNumber.size() >= 8)) &&
       (!('phoneNumber' in data.keys()) || (data.phoneNumber is string && data.phoneNumber.size() <= 20 && data.phoneNumber.matches('^(\\+[1-9]\\d{6,14})?$'))) &&
+      (!('emailOtpVerified' in data.keys()) || data.emailOtpVerified is bool) &&
       data.householdSize is int && data.householdSize >= 1 && data.householdSize <= 20 &&
       isValidLocation(data.defaultLocation) &&
       data.reminderDaysBefore is int && data.reminderDaysBefore >= 1 && data.reminderDaysBefore <= 14 &&
@@ -90,6 +84,10 @@ service cloud.firestore {
       data.emailRemindersEnabled is bool &&
       data.createdAt is timestamp &&
       data.updatedAt is timestamp;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isValidFoodItem(data, foodId, userId) {
@@ -142,6 +140,26 @@ service cloud.firestore {
       data.createdAt is timestamp;
     }
 
+    function isValidSelectedOrganisation(org) {
+      return org is map &&
+        org.keys().hasAll(['placeId', 'name', 'address', 'latitude', 'longitude']) &&
+        org.keys().hasOnly([
+          'placeId', 'name', 'address', 'phone', 'distanceMeters',
+          'category', 'latitude', 'longitude', 'googleMapsUri', 'directionsUri', 'websiteUri'
+        ]) &&
+        org.placeId is string && org.placeId.size() >= 1 && org.placeId.size() <= 200 &&
+        org.name is string && org.name.size() >= 1 && org.name.size() <= 160 &&
+        org.address is string && org.address.size() >= 1 && org.address.size() <= 300 &&
+        (org.latitude is int || org.latitude is float) && org.latitude >= -90 && org.latitude <= 90 &&
+        (org.longitude is int || org.longitude is float) && org.longitude >= -180 && org.longitude <= 180 &&
+        (!('phone' in org.keys()) || (org.phone is string && org.phone.size() <= 40)) &&
+        (!('distanceMeters' in org.keys()) || ((org.distanceMeters is int || org.distanceMeters is float) && org.distanceMeters >= 0 && org.distanceMeters <= 500000)) &&
+        (!('category' in org.keys()) || (org.category is string && org.category.size() <= 80)) &&
+        (!('googleMapsUri' in org.keys()) || (org.googleMapsUri is string && org.googleMapsUri.size() <= 500 && org.googleMapsUri.matches('^https://[^\\s]+$'))) &&
+        (!('directionsUri' in org.keys()) || (org.directionsUri is string && org.directionsUri.size() <= 500 && org.directionsUri.matches('^https://[^\\s]+$'))) &&
+        (!('websiteUri' in org.keys()) || (org.websiteUri is string && org.websiteUri.size() <= 500 && org.websiteUri.matches('^https?://[^\\s]+$')));
+    }
+
     function isValidDonationListing(data, donationId, userId) {
       return data.keys().hasAll([
         'id', 'userId', 'foodId', 'foodName', 'quantity', 'unit', 'category',
@@ -150,8 +168,10 @@ service cloud.firestore {
       ]) &&
       data.keys().hasOnly([
         'id', 'userId', 'foodId', 'foodName', 'quantity', 'unit', 'category',
-        'expiryDate', 'imageUrl', 'pickupLocation', 'contactInfo', 'notes',
-        'status', 'charityPartner', 'safetyConfirmed', 'createdAt', 'updatedAt'
+        'expiryDate', 'imageUrl', 'pickupLocation', 'pickupAddress', 'pickupLatitude',
+        'pickupLongitude', 'pickupPlaceId', 'contactInfo', 'donorPhone', 'notes',
+        'status', 'charityPartner', 'selectedOrganisation', 'safetyConfirmed',
+        'createdAt', 'updatedAt'
       ]) &&
       isValidId(data.id) && data.id == donationId &&
       isValidId(data.userId) && data.userId == userId && data.userId == request.auth.uid &&
@@ -162,11 +182,17 @@ service cloud.firestore {
       isValidCategory(data.category) &&
       isValidDateStr(data.expiryDate) &&
       isValidImageUrl(data.imageUrl) &&
-      data.pickupLocation is string && data.pickupLocation.size() >= 2 && data.pickupLocation.size() <= 200 &&
+      data.pickupLocation is string && data.pickupLocation.size() >= 2 && data.pickupLocation.size() <= 300 &&
+      (!('pickupAddress' in data.keys()) || (data.pickupAddress is string && data.pickupAddress.size() >= 2 && data.pickupAddress.size() <= 300)) &&
+      (!('pickupLatitude' in data.keys()) || ((data.pickupLatitude is int || data.pickupLatitude is float) && data.pickupLatitude >= -90 && data.pickupLatitude <= 90)) &&
+      (!('pickupLongitude' in data.keys()) || ((data.pickupLongitude is int || data.pickupLongitude is float) && data.pickupLongitude >= -180 && data.pickupLongitude <= 180)) &&
+      (!('pickupPlaceId' in data.keys()) || (data.pickupPlaceId is string && data.pickupPlaceId.size() <= 200)) &&
       data.contactInfo is string && data.contactInfo.size() >= 3 && data.contactInfo.size() <= 150 &&
+      (!('donorPhone' in data.keys()) || (data.donorPhone is string && data.donorPhone.size() >= 7 && data.donorPhone.size() <= 25 && data.donorPhone.matches('^\\+?[0-9\\s\\-\\(\\)]{7,24}$'))) &&
       data.notes is string && data.notes.size() <= 500 &&
       data.status in ['Available', 'Requested', 'Approved', 'Collected', 'Donated', 'Cancelled'] &&
-      data.charityPartner is string && data.charityPartner.size() <= 120 &&
+      data.charityPartner is string && data.charityPartner.size() <= 160 &&
+      (!('selectedOrganisation' in data.keys()) || isValidSelectedOrganisation(data.selectedOrganisation)) &&
       data.safetyConfirmed is bool && data.safetyConfirmed == true &&
       data.createdAt is timestamp &&
       data.updatedAt is timestamp;
@@ -238,36 +264,42 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isValidId(userId) && isOwner(userId);
       allow list: if false;
-      allow create: if isVerifiedUser() &&
+      allow create: if isSignedIn() &&
         isValidId(userId) &&
         isValidUserProfile(incoming(), userId) &&
+        (request.auth.token.email_verified == true || ('emailOtpVerified' in incoming().keys() && incoming().emailOtpVerified == true)) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
-      allow update: if isVerifiedUser() &&
+      allow update: if isSignedIn() &&
         isValidId(userId) &&
         isOwner(userId) &&
         isValidUserProfile(incoming(), userId) &&
+        (
+          request.auth.token.email_verified == true ||
+          ('emailOtpVerified' in existing().keys() && existing().emailOtpVerified == true) ||
+          ('emailOtpVerified' in incoming().keys() && incoming().emailOtpVerified == true)
+        ) &&
         incoming().uid == existing().uid &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'fullName', 'username', 'email', 'phoneNumber', 'householdSize',
+          'fullName', 'username', 'email', 'householdSize',
           'defaultLocation', 'reminderDaysBefore', 'browserNotificationsEnabled',
-          'emailRemindersEnabled', 'updatedAt'
+          'emailRemindersEnabled', 'emailOtpVerified', 'updatedAt'
         ]);
       allow delete: if false;
 
       match /foods/{foodId} {
         allow get: if isValidId(userId) && isValidId(foodId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(foodId) &&
           isValidFoodItem(incoming(), foodId, userId) &&
           incoming().createdAt == request.time &&
           incoming().updatedAt == request.time &&
           hasValidParentProfile(userId);
-        allow update: if isVerifiedUser() &&
+        allow update: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(foodId) &&
           isOwner(userId) &&
@@ -288,13 +320,13 @@ service cloud.firestore {
               'quantity', 'status', 'updatedAt'
             ])
           );
-        allow delete: if isVerifiedUser() && isValidId(userId) && isValidId(foodId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(foodId) && isOwner(userId) && hasValidParentProfile(userId);
       }
 
       match /quantityHistory/{entryId} {
         allow get: if isValidId(userId) && isValidId(entryId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(entryId) &&
           isValidQuantityHistory(incoming(), entryId, userId) &&
@@ -306,7 +338,7 @@ service cloud.firestore {
       match /donations/{donationId} {
         allow get: if isValidId(userId) && isValidId(donationId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(donationId) &&
           isValidDonationListing(incoming(), donationId, userId) &&
@@ -314,7 +346,7 @@ service cloud.firestore {
           incoming().createdAt == request.time &&
           incoming().updatedAt == request.time &&
           hasValidParentProfile(userId);
-        allow update: if isVerifiedUser() &&
+        allow update: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(donationId) &&
           isOwner(userId) &&
@@ -329,20 +361,22 @@ service cloud.firestore {
             // Action: Edit donation details
             incoming().diff(existing()).affectedKeys().hasOnly([
               'foodName', 'quantity', 'unit', 'category', 'expiryDate',
-              'imageUrl', 'pickupLocation', 'contactInfo', 'notes', 'charityPartner', 'updatedAt'
+              'imageUrl', 'pickupLocation', 'pickupAddress', 'pickupLatitude',
+              'pickupLongitude', 'pickupPlaceId', 'contactInfo', 'donorPhone',
+              'notes', 'charityPartner', 'selectedOrganisation', 'updatedAt'
             ]) ||
             // Action: Transition donation status
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'status', 'charityPartner', 'updatedAt'
+              'status', 'charityPartner', 'selectedOrganisation', 'updatedAt'
             ])
           );
-        allow delete: if isVerifiedUser() && isValidId(userId) && isValidId(donationId) && isOwner(userId) && hasValidParentProfile(userId);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(donationId) && isOwner(userId) && hasValidParentProfile(userId);
       }
 
       match /donationRequests/{requestId} {
         allow get: if isValidId(userId) && isValidId(requestId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(requestId) &&
           isValidDonationRequest(incoming(), requestId, userId) &&
@@ -351,7 +385,7 @@ service cloud.firestore {
           incoming().updatedAt == request.time &&
           hasValidParentProfile(userId) &&
           exists(/databases/$(database)/documents/users/$(userId)/donations/$(incoming().donationId));
-        allow update: if isVerifiedUser() &&
+        allow update: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(requestId) &&
           isOwner(userId) &&
@@ -370,7 +404,7 @@ service cloud.firestore {
       match /activityLogs/{logId} {
         allow get: if isValidId(userId) && isValidId(logId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(logId) &&
           isValidActivityLog(incoming(), logId, userId) &&
@@ -382,7 +416,7 @@ service cloud.firestore {
       match /aiActions/{actionId} {
         allow get: if isValidId(userId) && isValidId(actionId) && isOwner(userId) && hasValidParentProfile(userId);
         allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
-        allow create: if isVerifiedUser() &&
+        allow create: if isSignedIn() &&
           isValidId(userId) &&
           isValidId(actionId) &&
           isValidAiActionRecord(incoming(), actionId, userId) &&

@@ -53,6 +53,10 @@
         "emailRemindersEnabled": {
           "type": "boolean"
         },
+        "emailOtpVerified": {
+          "type": "boolean",
+          "description": "Whether the user completed server-verified 6-digit Email OTP verification."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -311,12 +315,35 @@
         "pickupLocation": {
           "type": "string",
           "minLength": 2,
+          "maxLength": 300
+        },
+        "pickupAddress": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 300
+        },
+        "pickupLatitude": {
+          "type": "number",
+          "description": "Exact pickup latitude (-90 to 90)."
+        },
+        "pickupLongitude": {
+          "type": "number",
+          "description": "Exact pickup longitude (-180 to 180)."
+        },
+        "pickupPlaceId": {
+          "type": "string",
           "maxLength": 200
         },
         "contactInfo": {
           "type": "string",
           "minLength": 3,
           "maxLength": 150
+        },
+        "donorPhone": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 25,
+          "pattern": "^\\+?[0-9\\s\\-\\(\\)]{7,24}$"
         },
         "notes": {
           "type": "string",
@@ -328,7 +355,24 @@
         },
         "charityPartner": {
           "type": "string",
-          "maxLength": 120
+          "maxLength": 160
+        },
+        "selectedOrganisation": {
+          "type": "object",
+          "properties": {
+            "placeId": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+            "address": { "type": "string", "minLength": 1, "maxLength": 300 },
+            "phone": { "type": "string", "maxLength": 40 },
+            "distanceMeters": { "type": "number" },
+            "category": { "type": "string", "maxLength": 80 },
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" },
+            "googleMapsUri": { "type": "string", "maxLength": 500 },
+            "directionsUri": { "type": "string", "maxLength": 500 },
+            "websiteUri": { "type": "string", "maxLength": 500 }
+          },
+          "required": ["placeId", "name", "address", "latitude", "longitude"]
         },
         "safetyConfirmed": {
           "type": "boolean"

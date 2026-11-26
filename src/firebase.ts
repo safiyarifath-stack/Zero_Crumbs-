@@ -1,11 +1,27 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  getAuth,
+  inMemoryPersistence,
+  setPersistence,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+export const authPersistenceReady: Promise<void> = setPersistence(auth, browserLocalPersistence).catch(
+  async () => {
+    try {
+      await setPersistence(auth, browserSessionPersistence);
+    } catch {
+      await setPersistence(auth, inMemoryPersistence);
+    }
+  }
+);
 
 export enum OperationType {
   CREATE = 'create',

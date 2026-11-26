@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { CheckCircle2, KeyRound, LogOut, Phone, Save } from 'lucide-react';
+import { CheckCircle2, KeyRound, LogOut, Save } from 'lucide-react';
 import { auth } from '../firebase';
 import { STORAGE_LOCATIONS, type StorageLocation, type UserProfile } from '../types';
 
@@ -40,6 +40,7 @@ export function ProfileSettingsView({
   );
 
   const [saving, setSaving] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -90,14 +91,17 @@ export function ProfileSettingsView({
 
   async function handleSendPasswordReset() {
     const email = profile?.email || auth.currentUser?.email;
-    if (!email) return;
+    if (!email || sendingReset) return;
     setErrorMsg('');
     setSuccessMsg('');
+    setSendingReset(true);
     try {
       await sendPasswordResetEmail(auth, email);
       setSuccessMsg(`Password reset email sent to ${email}.`);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to send password reset email.');
+    } finally {
+      setSendingReset(false);
     }
   }
 
@@ -149,7 +153,7 @@ export function ProfileSettingsView({
             />
           </div>
 
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-[#34443A] mb-1.5">
               Account Email
             </label>
@@ -159,21 +163,6 @@ export function ProfileSettingsView({
               disabled
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F5F2] border border-[#E5E7E2] text-sm text-[#5A6A60]"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-[#34443A] mb-1.5">
-              Verified Phone Number
-            </label>
-            <div className="relative">
-              <Phone className="w-3.5 h-3.5 text-[#6B7A70] absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={profile?.phoneNumber || auth.currentUser?.phoneNumber || 'Not linked'}
-                disabled
-                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#F4F5F2] border border-[#E5E7E2] text-sm text-[#5A6A60] font-mono tabular-nums"
-              />
-            </div>
           </div>
 
           <div>
@@ -279,11 +268,12 @@ export function ProfileSettingsView({
           </div>
           <button
             type="button"
+            disabled={sendingReset}
             onClick={() => void handleSendPasswordReset()}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl border border-[#DCE0D8] text-xs font-medium text-[#1A2820] hover:bg-[#F4F5F2] inline-flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="min-h-[44px] px-4 py-2.5 rounded-xl border border-[#DCE0D8] text-xs font-medium text-[#1A2820] hover:bg-[#F4F5F2] inline-flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-60"
           >
             <KeyRound className="w-3.5 h-3.5" />
-            Send Password Reset Email
+            {sendingReset ? 'Sending Reset Email...' : 'Send Password Reset Email'}
           </button>
         </div>
       )}

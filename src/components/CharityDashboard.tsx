@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Building2,
   CheckCircle2,
   Edit3,
+  ExternalLink,
   HeartHandshake,
+  Lock,
+  MapPin,
+  Navigation,
+  Phone,
   Plus,
   ShieldCheck,
   UserPlus,
@@ -21,6 +27,7 @@ import {
   type FoodItem,
   type FoodUnit,
   type OrganizationType,
+  type SelectedCharityOrganisation,
 } from '../types';
 import type { CreateDonationInput } from '../services/firestoreService';
 import {
@@ -31,7 +38,58 @@ import {
   getRecommendedPresetImage,
   isItemExpired,
 } from '../utils/foodUtils';
+import {
+  DonationPickupMapSelector,
+  type PickupLocationValue,
+} from './DonationPickupMapSelector';
 import { FoodImage } from './FoodImage';
+
+function validateDonorPhone(raw: string): { valid: boolean; cleaned: string; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: false, cleaned: '', error: 'Donor phone number is required for pickup coordination.' };
+  }
+  if (!/^\+?[0-9\s\-\(\)]{7,24}$/.test(trimmed)) {
+    return {
+      valid: false,
+      cleaned: trimmed,
+      error: 'Enter a valid phone number (digits, spaces, hyphens, or leading + country code).',
+    };
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) {
+    return {
+      valid: false,
+      cleaned: trimmed,
+      error: 'Phone number must contain between 7 and 15 digits.',
+    };
+  }
+  return { valid: true, cleaned: trimmed };
+}
+
+function formatDistanceLabel(meters?: number): string {
+  if (typeof meters !== 'number' || Number.isNaN(meters)) return '';
+  if (meters < 1000) return `${Math.round(meters)} m away`;
+  return `${(meters / 1000).toFixed(1)} km away`;
+}
+
+function buildPickupDirectionsUrl(don: DonationListing): string | null {
+  if (don.selectedOrganisation?.directionsUri) {
+    return don.selectedOrganisation.directionsUri;
+  }
+  if (typeof don.pickupLatitude === 'number' && typeof don.pickupLongitude === 'number') {
+    if (don.selectedOrganisation) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${don.selectedOrganisation.latitude},${don.selectedOrganisation.longitude}&destination=${don.pickupLatitude},${don.pickupLongitude}`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${don.pickupLatitude},${don.pickupLongitude}`;
+  }
+  if (don.pickupAddress || don.pickupLocation) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      don.pickupAddress || don.pickupLocation
+    )}`;
+  }
+  return null;
+}
 
 interface CharityDashboardProps {
   donations: DonationListing[];
@@ -96,6 +154,10 @@ export function CharityDashboard({
     prefillFood?.imageUrl || getRecommendedPresetImage('Produce', '')
   );
   const [pickupLocation, setPickupLocation] = useState('');
+  const [pickupLocationValue, setPickupLocationValue] = useState<PickupLocationValue | null>(null);
+  const [selectedOrganisation, setSelectedOrganisation] =
+    useState<SelectedCharityOrganisation | null>(null);
+  const [donorPhone, setDonorPhone] = useState('');
   const [contactInfo, setContactInfo] = useState(userEmail);
   const [notes, setNotes] = useState('');
   const [charityPartner, setCharityPartner] = useState('');
@@ -109,6 +171,12 @@ export function CharityDashboard({
   const [reqQty, setReqQty] = useState('1');
   const [reqWindow, setReqWindow] = useState('Today 4:00 PM – 6:00 PM');
   const [reqMsg, setReqMsg] = useState('');
+
+  useEffect(() => {
+    if (prefillFood) {
+      openNewModal(prefillFood);
+    }
+  }, [prefillFood]);
 
   const safeActiveFoods = activeFoods.filter((f) => !isItemExpired(f.expiryDate));
   const availableDonations = donations.filter((d) => d.status === 'Available');
@@ -141,6 +209,9 @@ export function CharityDashboard({
       setImageUrl(FOOD_IMAGE_PRESETS[0].url);
     }
     setPickupLocation('');
+    setPickupLocationValue(null);
+    setSelectedOrganisation(null);
+    setDonorPhone('');
     setContactInfo(userEmail);
     setNotes('');
     setCharityPartner('');
@@ -158,7 +229,20 @@ export function CharityDashboard({
     setCategory(don.category);
     setExpiryDate(don.expiryDate);
     setImageUrl(don.imageUrl);
-    setPickupLocation(don.pickupLocation);
+    setPickupLocation(don.pickupAddress || don.pickupLocation);
+    if (typeof don.pickupLatitude === 'number' && typeof don.pickupLongitude === 'number') {
+      setPickupLocationValue({
+        address: don.pickupAddress || don.pickupLocation,
+        latitude: don.pickupLatitude,
+        longitude: don.pickupLongitude,
+        placeId: don.pickupPlaceId,
+        confirmed: true,
+      });
+    } else {
+      setPickupLocationValue(null);
+    }
+    setSelectedOrganisation(don.selectedOrganisation || null);
+    setDonorPhone(don.donorPhone || '');
     setContactInfo(don.contactInfo);
     setNotes(don.notes);
     setCharityPartner(don.charityPartner);
@@ -197,11 +281,36 @@ export function CharityDashboard({
       );
       return;
     }
-    if (!pickupLocation.trim() || pickupLocation.trim().length < 2) {
-      setFormError('Please specify a pickup location.');
+
+    const effectivePickupAddress = (
+      pickupLocationValue?.address || pickupLocation
+    ).trim();
+
+    if (!editingDonation && !pickupLocationValue?.confirmed) {
+      setFormError(
+        'Please select your exact pickup location on the Google Map and click "Confirm Pickup Location" before publishing.'
+      );
       return;
     }
-    if (!contactInfo.trim() || contactInfo.trim().length < 3) {
+    if (editingDonation && pickupLocationValue && !pickupLocationValue.confirmed) {
+      setFormError(
+        'Please click "Confirm Pickup Location" after adjusting the map pin.'
+      );
+      return;
+    }
+    if (!effectivePickupAddress || effectivePickupAddress.length < 2) {
+      setFormError('Please confirm a valid pickup location.');
+      return;
+    }
+
+    const phoneValidation = validateDonorPhone(donorPhone);
+    if (!phoneValidation.valid) {
+      setFormError(phoneValidation.error || 'Please enter a valid donor contact phone number.');
+      return;
+    }
+
+    const finalContactInfo = (contactInfo.trim() || userEmail || phoneValidation.cleaned).trim();
+    if (finalContactInfo.length < 3) {
       setFormError('Please enter contact details for pickup coordination.');
       return;
     }
@@ -211,6 +320,12 @@ export function CharityDashboard({
       );
       return;
     }
+
+    const finalPartnerName = (
+      selectedOrganisation?.name ||
+      charityPartner ||
+      ''
+    ).trim();
 
     setSaving(true);
     try {
@@ -222,10 +337,20 @@ export function CharityDashboard({
           category,
           expiryDate,
           imageUrl,
-          pickupLocation: pickupLocation.trim(),
-          contactInfo: contactInfo.trim(),
+          pickupLocation: effectivePickupAddress,
+          pickupAddress: effectivePickupAddress,
+          ...(pickupLocationValue
+            ? {
+                pickupLatitude: pickupLocationValue.latitude,
+                pickupLongitude: pickupLocationValue.longitude,
+                pickupPlaceId: pickupLocationValue.placeId,
+              }
+            : {}),
+          donorPhone: phoneValidation.cleaned,
+          contactInfo: finalContactInfo,
           notes: notes.trim(),
-          charityPartner: charityPartner.trim(),
+          charityPartner: finalPartnerName,
+          ...(selectedOrganisation ? { selectedOrganisation } : {}),
         });
       } else {
         const srcFood = safeActiveFoods.find((f) => f.id === selectedFoodId) || null;
@@ -237,10 +362,16 @@ export function CharityDashboard({
           category,
           expiryDate,
           imageUrl,
-          pickupLocation: pickupLocation.trim(),
-          contactInfo: contactInfo.trim(),
+          pickupLocation: effectivePickupAddress,
+          pickupAddress: effectivePickupAddress,
+          pickupLatitude: pickupLocationValue!.latitude,
+          pickupLongitude: pickupLocationValue!.longitude,
+          pickupPlaceId: pickupLocationValue!.placeId,
+          donorPhone: phoneValidation.cleaned,
+          contactInfo: finalContactInfo,
           notes: notes.trim(),
-          charityPartner: charityPartner.trim(),
+          charityPartner: finalPartnerName,
+          selectedOrganisation: selectedOrganisation || undefined,
           safetyConfirmed: true,
           sourceFoodItem: srcFood,
         });
@@ -382,81 +513,201 @@ export function CharityDashboard({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeListings.map((don) => (
-                <div
-                  key={don.id}
-                  className="bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden flex flex-col"
-                >
-                  <div className="aspect-[16/9] bg-[#F2F4EF]">
-                    <FoodImage src={don.imageUrl} alt={don.foodName} />
-                  </div>
-                  <div className="p-5 flex-1 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 className="font-display text-base font-semibold text-[#1A2820]">
-                          {don.foodName}
-                        </h3>
-                        <span className="font-mono text-xs font-semibold tabular-nums text-[#1B4332]">
-                          {formatQuantity(don.quantity, don.unit)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#5A6A60] mb-2">
-                        {don.category} · Best before {formatShortDate(don.expiryDate)} · Status:{' '}
-                        <strong className="text-[#1A2820]">{don.status}</strong>
-                      </p>
-                      <p className="text-xs text-[#4F5E55]">
-                        Pickup: {don.pickupLocation} · Contact: {don.contactInfo}
-                      </p>
-                      {don.charityPartner && (
-                        <p className="text-xs text-[#355E4B] mt-1 font-medium">
-                          Partner: {don.charityPartner}
-                        </p>
-                      )}
-                      {don.notes && (
-                        <p className="text-xs text-[#5A6A60] mt-2">{don.notes}</p>
-                      )}
-                    </div>
+              {activeListings.map((don) => {
+                const directionsHref = buildPickupDirectionsUrl(don);
+                const selectedOrg = don.selectedOrganisation;
+                const telNumber = (don.donorPhone || '').replace(/[^\d+]/g, '');
 
-                    <div className="space-y-2 pt-3 border-t border-[#ECEEE8]">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          aria-label={`Change status for ${don.foodName}`}
-                          value={don.status}
-                          onChange={(e) =>
-                            void onTransitionStatus(don, e.target.value as DonationStatus)
-                          }
-                          className="px-3 py-1.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-xs font-medium text-[#1A2820]"
-                        >
-                          {DONATION_STATUSES.map((st) => (
-                            <option key={st} value={st}>
-                              Status: {st}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRequestTarget(don);
-                            setReqQty(String(don.quantity));
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Log Partner Request
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(don)}
-                          className="p-1.5 rounded-xl border border-[#DCE0D8] text-[#34443A] hover:bg-[#F4F5F2] cursor-pointer"
-                          title="Edit listing"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                return (
+                  <div
+                    key={don.id}
+                    className="bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden flex flex-col"
+                  >
+                    <div className="aspect-[16/9] bg-[#F2F4EF]">
+                      <FoodImage src={don.imageUrl} alt={don.foodName} />
+                    </div>
+                    <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h3 className="font-display text-base font-semibold text-[#1A2820]">
+                              {don.foodName}
+                            </h3>
+                            <span className="font-mono text-xs font-semibold tabular-nums text-[#1B4332]">
+                              {formatQuantity(don.quantity, don.unit)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#5A6A60]">
+                            {don.category} · Best before {formatShortDate(don.expiryDate)} · Status:{' '}
+                            <strong className="text-[#1A2820]">{don.status}</strong>
+                          </p>
+                        </div>
+
+                        {/* Exact Pickup Address & Coordinates */}
+                        <div className="p-3 rounded-xl bg-[#FAF9F6] border border-[#ECEEE8] space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-[#34443A] flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-[#1B4332] shrink-0" />
+                                Pickup Address
+                              </p>
+                              <p className="text-xs text-[#1A2820] mt-0.5 break-words">
+                                {don.pickupAddress || don.pickupLocation}
+                              </p>
+                              {typeof don.pickupLatitude === 'number' &&
+                                typeof don.pickupLongitude === 'number' && (
+                                  <p className="text-[10px] font-mono text-[#6B7A70] tabular-nums mt-0.5">
+                                    Pin: {don.pickupLatitude.toFixed(5)},{' '}
+                                    {don.pickupLongitude.toFixed(5)}
+                                  </p>
+                                )}
+                            </div>
+                            {directionsHref && (
+                              <a
+                                href={directionsHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1.5 rounded-lg bg-white border border-[#DCE0D8] text-[11px] font-medium text-[#1B4332] hover:bg-[#EEF3EC] inline-flex items-center gap-1 shrink-0"
+                              >
+                                <Navigation className="w-3 h-3" />
+                                Get Directions
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Selected Charity Organisation & Private Donor Handoff Card */}
+                        {(selectedOrg || don.charityPartner || don.donorPhone) && (
+                          <div className="p-3 rounded-xl bg-[#EEF3EC]/70 border border-[#C7DBC9] space-y-2">
+                            {(selectedOrg || don.charityPartner) && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[11px] font-semibold text-[#1B4332] flex items-center gap-1">
+                                    <Building2 className="w-3.5 h-3.5 shrink-0" />
+                                    Selected Charity Organisation
+                                  </p>
+                                  {selectedOrg?.distanceMeters !== undefined && (
+                                    <span className="text-[11px] font-mono text-[#1B4332] tabular-nums">
+                                      {formatDistanceLabel(selectedOrg.distanceMeters)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs font-semibold text-[#1A2820]">
+                                  {selectedOrg?.name || don.charityPartner}
+                                  {selectedOrg?.category ? (
+                                    <span className="font-normal text-[#5A6A60]">
+                                      {' '}
+                                      · {selectedOrg.category}
+                                    </span>
+                                  ) : null}
+                                </p>
+                                {selectedOrg?.address && (
+                                  <p className="text-[11px] text-[#4F5E55]">{selectedOrg.address}</p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                  {selectedOrg?.phone && (
+                                    <a
+                                      href={`tel:${selectedOrg.phone.replace(/[^\d+]/g, '')}`}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#C7DBC9] text-[11px] font-medium text-[#1B4332] hover:bg-[#FAF9F6]"
+                                    >
+                                      <Phone className="w-3 h-3" />
+                                      Call Charity ({selectedOrg.phone})
+                                    </a>
+                                  )}
+                                  {selectedOrg?.googleMapsUri && (
+                                    <a
+                                      href={selectedOrg.googleMapsUri}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#C7DBC9] text-[11px] font-medium text-[#34443A] hover:bg-[#FAF9F6]"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      Google Maps
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Private Donor Contact for Selected Charity Pickup */}
+                            {don.donorPhone && (
+                              <div className="pt-2 border-t border-[#C7DBC9]/70 flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-medium text-[#355E4B] flex items-center gap-1">
+                                    <Lock className="w-3 h-3 shrink-0" />
+                                    Donor Contact (Shared only with selected organisation)
+                                  </p>
+                                  <p className="text-xs font-mono font-medium text-[#1A2820]">
+                                    {don.donorPhone}
+                                  </p>
+                                </div>
+                                {telNumber && (
+                                  <a
+                                    href={`tel:${telNumber}`}
+                                    className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] inline-flex items-center gap-1.5 shrink-0"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" />
+                                    Call Donor
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {!don.donorPhone && don.contactInfo && (
+                          <p className="text-xs text-[#4F5E55]">Contact: {don.contactInfo}</p>
+                        )}
+
+                        {don.notes && (
+                          <p className="text-xs text-[#5A6A60]">{don.notes}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 pt-3 border-t border-[#ECEEE8]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            aria-label={`Change status for ${don.foodName}`}
+                            value={don.status}
+                            onChange={(e) =>
+                              void onTransitionStatus(don, e.target.value as DonationStatus)
+                            }
+                            className="px-3 py-1.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-xs font-medium text-[#1A2820]"
+                          >
+                            {DONATION_STATUSES.map((st) => (
+                              <option key={st} value={st}>
+                                Status: {st}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRequestTarget(don);
+                              setReqQty(String(don.quantity));
+                              if (don.selectedOrganisation?.name) {
+                                setReqOrgName(don.selectedOrganisation.name);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Log Partner Request
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(don)}
+                            className="p-1.5 rounded-xl border border-[#DCE0D8] text-[#34443A] hover:bg-[#F4F5F2] cursor-pointer"
+                            title="Edit listing"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -585,14 +836,15 @@ export function CharityDashboard({
       {/* Create / Edit Donation Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A2820]/40 backdrop-blur-[2px] p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-xl bg-white border border-[#E5E7E2] rounded-2xl p-4 sm:p-6 shadow-xl my-auto max-h-[92dvh] overflow-y-auto">
+          <div className="w-full max-w-3xl bg-white border border-[#E5E7E2] rounded-2xl p-4 sm:p-6 shadow-xl my-auto max-h-[92dvh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 mb-5 border-b border-[#E5E7E2]">
               <div>
                 <h2 className="font-display text-lg font-semibold text-[#1A2820]">
                   {editingDonation ? 'Edit Donation Listing' : 'Create Surplus Donation Listing'}
                 </h2>
                 <p className="text-xs text-[#5A6A60]">
-                  Only non-expired, safe food may be listed for charity pickup.
+                  Set your exact pickup pin on Google Maps, verify your phone number, and select a
+                  nearby charity organisation.
                 </p>
               </div>
               <button
@@ -607,7 +859,7 @@ export function CharityDashboard({
               </button>
             </div>
 
-            <form onSubmit={handleSaveDonation} className="space-y-4">
+            <form onSubmit={handleSaveDonation} className="space-y-5">
               {formError && (
                 <div className="p-3 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-sm text-[#9E2F2F]">
                   {formError}
@@ -634,6 +886,7 @@ export function CharityDashboard({
                 </div>
               )}
 
+              {/* Step 1: Food Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-[#34443A] mb-1">
@@ -705,36 +958,81 @@ export function CharityDashboard({
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm font-mono tabular-nums"
                   />
                 </div>
+              </div>
 
-                <div className="sm:col-span-2">
+              {/* Step 2 & 4: Interactive Google Map Pickup Selector & Nearby Charities */}
+              <div className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#E5E7E2] space-y-3">
+                <DonationPickupMapSelector
+                  value={pickupLocationValue}
+                  selectedOrganisation={selectedOrganisation}
+                  onChangeLocation={(nextLoc) => {
+                    setPickupLocationValue(nextLoc);
+                    setPickupLocation(nextLoc.address);
+                  }}
+                  onSelectOrganisation={(org) => {
+                    setSelectedOrganisation(org);
+                    if (org) {
+                      setCharityPartner(org.name);
+                    }
+                  }}
+                />
+
+                {selectedOrganisation && (
+                  <div className="p-3 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] flex items-center justify-between gap-2 text-xs text-[#1B4332]">
+                    <span>
+                      Selected organisation: <strong>{selectedOrganisation.name}</strong> (
+                      {selectedOrganisation.address})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedOrganisation(null);
+                        setCharityPartner('');
+                      }}
+                      className="underline font-medium cursor-pointer shrink-0"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 3: Mandatory Donor Contact Phone & Additional Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
                   <label className="block text-xs font-medium text-[#34443A] mb-1">
-                    Pickup Location *
+                    Donor Contact Phone Number *
                   </label>
                   <input
-                    type="text"
-                    value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
-                    placeholder="e.g., Oakwood Community Center or Front Porch Pickup"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    type="tel"
+                    required
+                    value={donorPhone}
+                    onChange={(e) => setDonorPhone(e.target.value)}
+                    placeholder="e.g., +91 98765 43210"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm font-mono"
                   />
+                  <p className="text-[11px] text-[#6B7A70] mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Private: shared only with the selected charity organisation for pickup.
+                  </p>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block text-xs font-medium text-[#34443A] mb-1">
-                    Contact Information *
+                    Pickup Coordination Email / Backup Note *
                   </label>
                   <input
                     type="text"
                     value={contactInfo}
                     onChange={(e) => setContactInfo(e.target.value)}
-                    placeholder="Email or phone number for pickup coordination"
+                    placeholder="Email or alternate pickup note"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-[#34443A] mb-1">
-                    Additional Notes (allergens, storage instructions, pickup hours)
+                    Additional Notes (allergens, gate code, pickup hours)
                   </label>
                   <input
                     type="text"

@@ -71,12 +71,12 @@ export interface UserProfile {
   fullName: string;
   username: string;
   email: string;
-  phoneNumber?: string;
   householdSize: number;
   defaultLocation: StorageLocation;
   reminderDaysBefore: number;
   browserNotificationsEnabled: boolean;
   emailRemindersEnabled: boolean;
+  emailOtpVerified?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -113,6 +113,22 @@ export interface QuantityHistoryEntry {
   createdAt?: Timestamp;
 }
 
+export interface SelectedCharityOrganisation {
+  placeId: string;
+  name: string;
+  address: string;
+  phone?: string;
+  distanceMeters?: number;
+  category?: string;
+  latitude: number;
+  longitude: number;
+  googleMapsUri?: string;
+  directionsUri?: string;
+  websiteUri?: string;
+}
+
+export interface NearbyCharityOrganisation extends SelectedCharityOrganisation {}
+
 export interface DonationListing {
   id: string;
   userId: string;
@@ -124,10 +140,16 @@ export interface DonationListing {
   expiryDate: string;
   imageUrl: string;
   pickupLocation: string;
+  pickupAddress?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  pickupPlaceId?: string;
   contactInfo: string;
+  donorPhone?: string;
   notes: string;
   status: DonationStatus;
   charityPartner: string;
+  selectedOrganisation?: SelectedCharityOrganisation;
   safetyConfirmed: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

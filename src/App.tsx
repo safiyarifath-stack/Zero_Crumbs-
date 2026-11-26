@@ -14,7 +14,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { auth } from './firebase';
+import { auth, authPersistenceReady } from './firebase';
 import {
   addFoodItem,
   adjustFoodQuantity,
@@ -23,6 +23,7 @@ import {
   deleteFoodItem,
   editFoodItem,
   ensureUserProfile,
+  getEmailOtpVerifiedStatus,
   loadSampleDemoData,
   subscribeUserCollections,
   transitionDonationStatus,
@@ -44,7 +45,12 @@ import type {
 import { getExpiryBucket } from './utils/foodUtils';
 import { ActivityHistoryView } from './components/ActivityHistoryView';
 import { AiAssistantPanel } from './components/AiAssistantPanel';
-import { AuthScreen, consumePendingSignupMeta } from './components/AuthScreen';
+import {
+  AuthScreen,
+  consumePendingSignupMetaByEmail,
+  peekPendingSignupMetaByEmail,
+  type PendingSignupMeta,
+} from './components/AuthScreen';
 import { CharityDashboard } from './components/CharityDashboard';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -68,13 +74,15 @@ const NAV_ITEMS: Array<{ id: NavPage; label: string; shortLabel: string; icon: t
   { id: 'settings', label: 'Profile and Settings', shortLabel: 'Settings', icon: Settings },
 ];
 
-function isUserVerified(u: User | null): u is User {
-  return Boolean(u && (u.emailVerified || u.phoneNumber));
-}
-
 function ZeroCrumbsWorkspace() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [verifiedUid, setVerifiedUid] = useState<string | null>(null);
+  const [verifyingAuth, setVerifyingAuth] = useState(false);
+  const [authRefreshTick, setAuthRefreshTick] = useState(0);
+  const [profileReadyUid, setProfileReadyUid] = useState<string | null>(null);
+  const [profileSyncError, setProfileSyncError] = useState('');
+  const [profileRetrying, setProfileRetrying] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [quantityHistory, setQuantityHistory] = useState<QuantityHistoryEntry[]>([]);
@@ -109,6 +117,9 @@ function ZeroCrumbsWorkspace() {
   }
 
   function clearSessionWorkspaceState() {
+    setVerifiedUid(null);
+    setProfileReadyUid(null);
+    setProfileSyncError('');
     setProfile(null);
     setFoods([]);
     setQuantityHistory([]);
@@ -127,28 +138,109 @@ function ZeroCrumbsWorkspace() {
     setToast(null);
     notifiedBrowserRef.current = false;
     setPage('home');
+    try {
+      for (let i = window.sessionStorage.length - 1; i >= 0; i--) {
+        const k = window.sessionStorage.key(i);
+        if (k && k.startsWith('zc_pending_signup_meta_')) {
+          window.sessionStorage.removeItem(k);
+        }
+      }
+    } catch {
+      // Ignore storage cleanup error
+    }
   }
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      setAuthReady(true);
-      if (isUserVerified(nextUser)) {
+  async function syncVerifiedUserProfile(
+    targetUser: User,
+    pendingMetaOverride?: PendingSignupMeta
+  ) {
+    setProfileSyncError('');
+    try {
+      const pendingMeta = pendingMetaOverride ?? consumePendingSignupMetaByEmail(targetUser.email);
+      if (pendingMetaOverride) {
+        consumePendingSignupMetaByEmail(targetUser.email);
+      }
+
+      if (pendingMeta?.otpProofToken) {
         try {
-          const pendingMeta = consumePendingSignupMeta(nextUser.uid);
-          await ensureUserProfile(nextUser, pendingMeta);
-        } catch (err) {
-          console.error(err);
+          const idToken = await targetUser.getIdToken();
+          await fetch('/api/auth/confirm-verified', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ otpProofToken: pendingMeta.otpProofToken }),
+          });
+        } catch {
+          // Non-fatal; ensureUserProfile persists emailOtpVerified to Firestore
         }
+      }
+
+      await ensureUserProfile(targetUser, pendingMeta);
+      setProfileReadyUid(targetUser.uid);
+    } catch (err) {
+      console.error('Failed to sync user profile:', err);
+      setProfileReadyUid(null);
+      setProfileSyncError(
+        'Could not load your Zero Crumbs profile from the cloud database. Please check your connection and retry.'
+      );
+    }
+  }
+
+  async function evaluateAndSyncUser(targetUser: User | null): Promise<void> {
+    if (!targetUser) {
+      clearSessionWorkspaceState();
+      return;
+    }
+
+    if (targetUser.emailVerified) {
+      setVerifiedUid(targetUser.uid);
+      await syncVerifiedUserProfile(targetUser);
+      return;
+    }
+
+    setVerifyingAuth(true);
+    try {
+      const pendingMeta = peekPendingSignupMetaByEmail(targetUser.email);
+      const otpVerified =
+        Boolean(pendingMeta?.emailOtpVerified) || (await getEmailOtpVerifiedStatus(targetUser.uid));
+
+      if (otpVerified) {
+        setVerifiedUid(targetUser.uid);
+        await syncVerifiedUserProfile(targetUser, pendingMeta);
       } else {
         clearSessionWorkspaceState();
       }
+    } finally {
+      setVerifyingAuth(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    let unsub: (() => void) | undefined;
+
+    void authPersistenceReady.finally(() => {
+      if (!active) return;
+      unsub = onAuthStateChanged(auth, async (nextUser) => {
+        if (!active) return;
+        setUser(nextUser);
+        await evaluateAndSyncUser(nextUser);
+        if (active) {
+          setAuthReady(true);
+        }
+      });
     });
-    return () => unsub();
+
+    return () => {
+      active = false;
+      unsub?.();
+    };
   }, []);
 
   useEffect(() => {
-    if (!isUserVerified(user)) return;
+    if (!user || verifiedUid !== user.uid || profileReadyUid !== user.uid) return;
     const unsub = subscribeUserCollections(user.uid, {
       onProfile: setProfile,
       onFoods: setFoods,
@@ -159,7 +251,7 @@ function ZeroCrumbsWorkspace() {
       onAiActions: setAiActions,
     });
     return () => unsub();
-  }, [user]);
+  }, [user, verifiedUid, profileReadyUid, authRefreshTick]);
 
   // Real browser notification trigger when enabled and permitted
   useEffect(() => {
@@ -196,7 +288,7 @@ function ZeroCrumbsWorkspace() {
     activeBtn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [page]);
 
-  if (!authReady) {
+  if (!authReady || verifyingAuth) {
     return (
       <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
         <div className="text-center space-y-2">
@@ -209,22 +301,73 @@ function ZeroCrumbsWorkspace() {
     );
   }
 
-  if (!isUserVerified(user)) {
+  const isVerifiedUser = Boolean(user && verifiedUid === user.uid);
+
+  if (!user || !isVerifiedUser) {
     return (
       <AuthScreen
-        unverifiedUser={user && !isUserVerified(user) ? user : null}
+        unverifiedUser={user && !isVerifiedUser ? user : null}
         onVerifiedRefresh={async () => {
           if (auth.currentUser) {
             await auth.currentUser.reload();
+            await auth.currentUser.getIdToken(true);
             const refreshed = auth.currentUser;
-            setUser(refreshed ? ({ ...refreshed } as User) : null);
-            if (isUserVerified(refreshed)) {
-              const pendingMeta = consumePendingSignupMeta(refreshed.uid);
-              await ensureUserProfile(refreshed, pendingMeta);
-            }
+            setUser(refreshed);
+            setAuthRefreshTick((t) => t + 1);
+            await evaluateAndSyncUser(refreshed);
           }
         }}
       />
+    );
+  }
+
+  if (profileSyncError) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-[#E5E7E2] rounded-2xl p-6 sm:p-8 text-center space-y-4">
+          <div className="w-11 h-11 rounded-xl bg-[#FDF2EC] text-[#9E2F2F] flex items-center justify-center mx-auto">
+            <Leaf className="w-5 h-5" />
+          </div>
+          <h1 className="font-display text-xl font-semibold text-[#1A2820]">
+            Account Sync Interrupted
+          </h1>
+          <p className="text-sm text-[#5A6A60] leading-relaxed">{profileSyncError}</p>
+          <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-1">
+            <button
+              type="button"
+              disabled={profileRetrying}
+              onClick={async () => {
+                setProfileRetrying(true);
+                await syncVerifiedUserProfile(user);
+                setProfileRetrying(false);
+              }}
+              className="min-h-[42px] px-5 py-2 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors cursor-pointer disabled:opacity-60"
+            >
+              {profileRetrying ? 'Retrying...' : 'Retry Sync'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleConfirmLogout()}
+              className="min-h-[42px] px-5 py-2 rounded-xl border border-[#DCE0D8] text-sm font-medium text-[#34443A] hover:bg-[#F4F5F2] transition-colors cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileReadyUid !== user.uid) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center mx-auto">
+            <Leaf className="w-5 h-5" />
+          </div>
+          <p className="text-sm font-medium text-[#1A2820]">Preparing your private pantry...</p>
+        </div>
+      </div>
     );
   }
 
@@ -262,8 +405,7 @@ function ZeroCrumbsWorkspace() {
     }
   }
 
-  const userDisplayLabel =
-    profile?.fullName || user.email || user.phoneNumber || 'Zero Crumbs Member';
+  const userDisplayLabel = profile?.fullName || user.email || 'Zero Crumbs Member';
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col max-w-full overflow-x-clip">
@@ -431,10 +573,7 @@ function ZeroCrumbsWorkspace() {
             }}
             onOpenAi={() => setAiDrawerOpen(true)}
             onLoadSampleData={async () => {
-              await loadSampleDemoData(
-                user.uid,
-                user.email || user.phoneNumber || 'Zero Crumbs Member'
-              );
+              await loadSampleDemoData(user.uid, user.email || 'Zero Crumbs Member');
               showToast('Loaded clearly labelled sample household items.');
             }}
           />
@@ -484,10 +623,7 @@ function ZeroCrumbsWorkspace() {
               handleNavigate('charity');
             }}
             onLoadSampleData={async () => {
-              await loadSampleDemoData(
-                user.uid,
-                user.email || user.phoneNumber || 'Zero Crumbs Member'
-              );
+              await loadSampleDemoData(user.uid, user.email || 'Zero Crumbs Member');
               showToast('Loaded clearly labelled sample household items.');
             }}
           />
@@ -519,7 +655,7 @@ function ZeroCrumbsWorkspace() {
             donations={donations}
             requests={donationRequests}
             activeFoods={activeFoods}
-            userEmail={user.email || user.phoneNumber || ''}
+            userEmail={user.email || ''}
             prefillFood={charityPrefillFood}
             onClearPrefill={() => setCharityPrefillFood(null)}
             onCreateDonation={async (input) => {
@@ -711,9 +847,48 @@ function ZeroCrumbsWorkspace() {
 }
 
 export default function App() {
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', handler);
+    return () => window.removeEventListener('gmp-quota-exceeded', handler);
+  }, []);
+
   return (
     <ErrorBoundary>
+      {quotaExceeded && (
+        <div
+          role="alert"
+          className="sticky top-0 z-50 w-full bg-[#FDF2EC] border-b border-[#EBC6BA] text-[#7F2323] px-4 py-2.5 text-xs sm:text-sm"
+        >
+          <div className="max-w-[1360px] mx-auto flex items-center justify-between gap-3">
+            <span>
+              Google Maps quota exceeded: the daily free-tier limit (100 req/day) has been reached.
+              Upgrade your Google Cloud billing plan or add your own Google Maps API key to continue
+              using map features.{' '}
+              <a
+                href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-semibold hover:text-[#5B1616]"
+              >
+                Learn more
+              </a>
+            </span>
+            <button
+              type="button"
+              onClick={() => setQuotaExceeded(false)}
+              className="p-1 rounded-lg hover:bg-[#FAE4DA] cursor-pointer shrink-0"
+              aria-label="Dismiss Google Maps quota notice"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
       <ZeroCrumbsWorkspace />
     </ErrorBoundary>
   );
 }
+

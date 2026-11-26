@@ -4,6 +4,12 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import {
+  defaultSendEmail,
+  EmailOtpService,
+  getEmailDeliveryStatus,
+  type OtpPurpose,
+} from './server/emailOtpService';
 
 dotenv.config();
 
@@ -13,13 +19,23 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+const emailOtpService = new EmailOtpService();
+const verifiedOtpUids = new Set<string>();
+
 // Load Firebase client config for verifying Firebase ID tokens via Identity Toolkit REST API (no IAM required)
 let firebaseApiKey = '';
+let firebaseProjectId = '';
+let firestoreDatabaseId = '(default)';
 try {
   const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
   if (fs.existsSync(cfgPath)) {
     const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
     firebaseApiKey = typeof raw.apiKey === 'string' ? raw.apiKey : '';
+    firebaseProjectId = typeof raw.projectId === 'string' ? raw.projectId : '';
+    firestoreDatabaseId =
+      typeof raw.firestoreDatabaseId === 'string' && raw.firestoreDatabaseId
+        ? raw.firestoreDatabaseId
+        : '(default)';
   }
 } catch (err) {
   console.error('Could not load firebase-applet-config.json:', err);
@@ -28,8 +44,8 @@ try {
 interface VerifiedUser {
   uid: string;
   email: string;
-  phoneNumber: string;
   emailVerified: boolean;
+  idToken: string;
 }
 
 async function verifyFirebaseBearerToken(req: express.Request): Promise<VerifiedUser | null> {
@@ -58,22 +74,45 @@ async function verifyFirebaseBearerToken(req: express.Request): Promise<Verified
       users?: Array<{
         localId?: string;
         email?: string;
-        phoneNumber?: string;
         emailVerified?: boolean;
       }>;
     };
     const u = data.users?.[0];
-    if (!u?.localId || (!u.email && !u.phoneNumber)) {
+    if (!u?.localId || !u.email) {
       return null;
     }
     return {
       uid: u.localId,
-      email: u.email || '',
-      phoneNumber: u.phoneNumber || '',
+      email: u.email,
       emailVerified: Boolean(u.emailVerified),
+      idToken,
     };
   } catch {
     return null;
+  }
+}
+
+async function isEmailOtpVerifiedInFirestore(uid: string, idToken: string): Promise<boolean> {
+  if (!firebaseProjectId || !idToken) return false;
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(firebaseProjectId)}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents/users/${encodeURIComponent(uid)}`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${idToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return false;
+    const doc = (await resp.json()) as {
+      fields?: {
+        emailOtpVerified?: { booleanValue?: boolean };
+      };
+    };
+    const verified = doc?.fields?.emailOtpVerified?.booleanValue === true;
+    if (verified) {
+      verifiedOtpUids.add(uid);
+    }
+    return verified;
+  } catch {
+    return false;
   }
 }
 
@@ -87,9 +126,14 @@ async function requireAuth(
     res.status(401).json({ error: 'Authentication required. Please sign in to continue.' });
     return;
   }
-  if (!user.emailVerified && !user.phoneNumber) {
+  const otpVerified =
+    user.emailVerified ||
+    verifiedOtpUids.has(user.uid) ||
+    (await isEmailOtpVerifiedInFirestore(user.uid, user.idToken));
+
+  if (!otpVerified) {
     res.status(403).json({
-      error: 'Please verify your email address or phone number before performing this action.',
+      error: 'Please verify your email address via Email OTP before performing this action.',
     });
     return;
   }
@@ -117,13 +161,175 @@ function getGeminiClient() {
   });
 }
 
+const GMP_SOLUTION_ID = 'gmp_mcp_codeassist_v1_aistudio';
+
+function getGoogleMapsApiKey(): string {
+  const candidates = [
+    process.env.GOOGLE_MAPS_API_KEY,
+    process.env.VITE_GOOGLE_MAPS_API_KEY,
+  ];
+  for (const val of candidates) {
+    if (
+      typeof val === 'string' &&
+      val.trim().length > 0 &&
+      val !== 'MY_GOOGLE_MAPS_API_KEY'
+    ) {
+      return val.trim();
+    }
+  }
+  return '';
+}
+
+function isMapsQuotaError(status: number, rawBody: string): boolean {
+  if (status === 429) return true;
+  const upper = rawBody.toUpperCase();
+  return (
+    upper.includes('RESOURCE_EXHAUSTED') ||
+    upper.includes('OVER_QUERY_LIMIT') ||
+    upper.includes('OVERQUOTA') ||
+    upper.includes('QUOTA')
+  );
+}
+
+function haversineDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+interface CachedCharityResult {
+  expiresAt: number;
+  organisations: Array<{
+    placeId: string;
+    name: string;
+    address: string;
+    phone?: string;
+    category: string;
+    latitude: number;
+    longitude: number;
+    distanceMeters: number;
+    googleMapsUri?: string;
+    directionsUri: string;
+    websiteUri?: string;
+  }>;
+}
+
+const nearbyCharitiesCache = new Map<string, CachedCharityResult>();
+
 // Health check
 app.get('/api/health', (_req, res) => {
+  const emailDelivery = getEmailDeliveryStatus();
   res.json({
     ok: true,
     service: 'zero-crumbs-api',
     geminiConfigured: isGeminiKeyConfigured(),
+    mapsConfigured: Boolean(getGoogleMapsApiKey()),
+    emailOtpConfigured: emailDelivery.configured,
+    emailDeliveryProvider: emailDelivery.provider,
   });
+});
+
+// Public Email OTP delivery configuration status (no secrets exposed)
+app.get('/api/auth/otp-status', (_req, res) => {
+  const status = getEmailDeliveryStatus();
+  res.json(status);
+});
+
+// Send 6-digit Email OTP (signup or existing unverified email verification)
+app.post('/api/auth/send-otp', async (req, res) => {
+  const { email, fullName, purpose } = req.body as {
+    email?: string;
+    fullName?: string;
+    purpose?: OtpPurpose;
+  };
+  const safePurpose: OtpPurpose =
+    purpose === 'verify-existing' ? 'verify-existing' : 'signup';
+  const clientIp =
+    (typeof req.headers['x-forwarded-for'] === 'string'
+      ? req.headers['x-forwarded-for'].split(',')[0].trim()
+      : req.ip) || 'unknown';
+
+  const result = await emailOtpService.sendOtp({
+    email: typeof email === 'string' ? email : '',
+    fullName: typeof fullName === 'string' ? fullName : '',
+    purpose: safePurpose,
+    ip: clientIp,
+  });
+
+  if (!result.ok) {
+    res.status(result.status).json({
+      error: result.error,
+      code: result.code,
+      retryAfterSeconds: result.retryAfterSeconds,
+      missingEmailService: result.missingEmailService,
+    });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    expiresInSeconds: result.expiresInSeconds,
+    resendCooldownSeconds: result.resendCooldownSeconds,
+    provider: result.provider,
+  });
+});
+
+// Verify 6-digit Email OTP securely on the server
+app.post('/api/auth/verify-otp', (req, res) => {
+  const { email, otp, purpose } = req.body as {
+    email?: string;
+    otp?: string;
+    purpose?: OtpPurpose;
+  };
+  const safePurpose: OtpPurpose =
+    purpose === 'verify-existing' ? 'verify-existing' : 'signup';
+
+  const result = emailOtpService.verifyOtp({
+    email: typeof email === 'string' ? email : '',
+    otp: typeof otp === 'string' ? otp : '',
+    purpose: safePurpose,
+  });
+
+  if (!result.ok) {
+    res.status(result.status).json({
+      error: result.error,
+      code: result.code,
+      attemptsRemaining: result.attemptsRemaining,
+    });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    otpProofToken: result.otpProofToken,
+  });
+});
+
+// Bind verified Email OTP proof to a newly created or existing Firebase UID
+app.post('/api/auth/confirm-verified', async (req, res) => {
+  const user = await verifyFirebaseBearerToken(req);
+  if (!user) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+  const { otpProofToken } = req.body as { otpProofToken?: string };
+  if (!otpProofToken || !emailOtpService.verifyOtpProofToken(otpProofToken, user.email)) {
+    res.status(403).json({ error: 'Invalid or expired email OTP verification proof.' });
+    return;
+  }
+  verifiedOtpUids.add(user.uid);
+  res.json({ ok: true, uid: user.uid });
 });
 
 // Check Gemini AI integration status for authenticated users
@@ -136,36 +342,30 @@ app.get('/api/ai/status', requireAuth, (_req, res) => {
 
 // Check real email reminder integration status
 app.get('/api/reminders/status', requireAuth, (_req, res) => {
-  const missingEnv: string[] = [];
-  if (!process.env.RESEND_API_KEY) missingEnv.push('RESEND_API_KEY');
-  if (!process.env.REMINDER_FROM_EMAIL) missingEnv.push('REMINDER_FROM_EMAIL');
+  const delivery = getEmailDeliveryStatus();
   res.json({
-    emailConfigured: missingEnv.length === 0,
-    missingEnv,
+    emailConfigured: delivery.configured,
+    provider: delivery.provider,
+    missingEnv: delivery.missingEnv,
   });
 });
 
-// Send real email reminder via Resend if configured
+// Send real email reminder via configured free Apps Script MailApp or Resend
 app.post('/api/reminders/send-email', requireAuth, async (req, res) => {
   const authUser = (req as express.Request & { authUser?: VerifiedUser }).authUser;
   if (!authUser?.email) {
     res.status(400).json({
-      error:
-        'Your account does not have an email address linked. Use Browser Push Notifications or add an email in Firebase.',
+      error: 'Your account does not have an email address linked.',
     });
     return;
   }
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.REMINDER_FROM_EMAIL;
 
-  if (!apiKey || !fromEmail) {
+  const delivery = getEmailDeliveryStatus();
+  if (!delivery.configured) {
     res.status(503).json({
       error:
-        'Email reminder service is not connected yet. Configure RESEND_API_KEY and REMINDER_FROM_EMAIL in Settings > Secrets to enable real email reminders.',
-      missingEnv: [
-        ...(!apiKey ? ['RESEND_API_KEY'] : []),
-        ...(!fromEmail ? ['REMINDER_FROM_EMAIL'] : []),
-      ],
+        'Email reminder service is not connected yet. Configure APPS_SCRIPT_EMAIL_URL (free Google Apps Script MailApp) or RESEND_API_KEY and REMINDER_FROM_EMAIL in Settings > Secrets.',
+      missingEnv: delivery.missingEnv,
     });
     return;
   }
@@ -193,28 +393,15 @@ app.post('/api/reminders/send-email', requireAuth, async (req, res) => {
       : 'No items are currently within your expiry reminder window.';
 
   try {
-    const emailResp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [authUser!.email],
-        subject: `Zero Crumbs Reminder: ${items.length} food item${items.length === 1 ? '' : 's'} expiring within ${days} days`,
-        text: `Hello,\n\nHere is your Zero Crumbs expiry alert (window: ${days} days):\n\n${itemRows}\n\nOpen Zero Crumbs to plan meals or share safe surplus food before it goes to waste.\n\nSave Food. Reduce Waste. Share Goodness.`,
-      }),
+    const subject = `Zero Crumbs Reminder: ${items.length} food item${items.length === 1 ? '' : 's'} expiring within ${days} days`;
+    const text = `Hello,\n\nHere is your Zero Crumbs expiry alert (window: ${days} days):\n\n${itemRows}\n\nOpen Zero Crumbs to plan meals or share safe surplus food before it goes to waste.\n\nSave Food. Reduce Waste. Share Goodness.`;
+    const result = await defaultSendEmail({
+      to: authUser.email,
+      subject,
+      text,
+      html: `<pre style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; white-space: pre-wrap;">${text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] || c))}</pre>`,
     });
-
-    if (!emailResp.ok) {
-      const errText = await emailResp.text();
-      res.status(502).json({ error: `Email provider rejected request: ${errText}` });
-      return;
-    }
-
-    const result = await emailResp.json();
-    res.json({ ok: true, id: (result as { id?: string }).id ?? null });
+    res.json({ ok: true, provider: result.provider });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : 'Failed to send email reminder.',
@@ -1068,6 +1255,405 @@ CORE RULES:
     res.status(500).json({
       error: 'Zero Crumbs AI could not complete that request right now. Please tap Retry.',
       retryable: true,
+    });
+  }
+});
+
+// --- Google Maps Platform Integration Endpoints ---
+
+// Expose runtime Google Maps JS API key to authenticated users without hardcoding
+app.get('/api/maps/config', requireAuth, (_req, res) => {
+  const apiKey = getGoogleMapsApiKey();
+  res.json({
+    configured: Boolean(apiKey),
+    apiKey,
+  });
+});
+
+// Forward Geocoding API v4 proxy (address string -> lat/lng + formattedAddress)
+app.post('/api/maps/geocode', requireAuth, async (req, res) => {
+  const apiKey = getGoogleMapsApiKey();
+  if (!apiKey) {
+    res.status(503).json({
+      error:
+        'Google Maps API key is not configured on the server. Add GOOGLE_MAPS_API_KEY in Settings > Secrets.',
+      missingMapsKey: true,
+    });
+    return;
+  }
+
+  const { address } = req.body as { address?: string };
+  if (typeof address !== 'string' || address.trim().length < 2 || address.trim().length > 300) {
+    res.status(400).json({ error: 'Please enter a valid street address, area, or postal code.' });
+    return;
+  }
+
+  const trimmed = address.trim();
+  try {
+    const endpoint = `https://geocode.googleapis.com/v4/geocode/address/${encodeURIComponent(trimmed)}?languageCode=en`;
+    const resp = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'results.placeId,results.location,results.formattedAddress',
+        'X-Goog-Maps-Solution-ID': GMP_SOLUTION_ID,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      if (isMapsQuotaError(resp.status, rawText)) {
+        res.status(429).json({
+          error: 'Google Maps daily free-tier quota exceeded.',
+          quotaExceeded: true,
+        });
+        return;
+      }
+      res.status(resp.status >= 400 && resp.status < 500 ? resp.status : 502).json({
+        error: 'Could not resolve that address using Google Geocoding API.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(rawText) as {
+      results?: Array<{
+        placeId?: string;
+        formattedAddress?: string;
+        location?: { latitude?: number; longitude?: number };
+      }>;
+    };
+
+    const first = data.results?.[0];
+    if (
+      !first ||
+      typeof first.location?.latitude !== 'number' ||
+      typeof first.location?.longitude !== 'number'
+    ) {
+      res.status(404).json({
+        error:
+          'No matching address was found. Try including a city or neighborhood, or move the pin directly on the map.',
+      });
+      return;
+    }
+
+    res.json({
+      lat: first.location.latitude,
+      lng: first.location.longitude,
+      formattedAddress: first.formattedAddress || trimmed,
+      placeId: first.placeId || '',
+    });
+  } catch (err) {
+    console.error('Geocode proxy error:', err);
+    res.status(502).json({
+      error: 'Could not reach Google Geocoding service. Please check your connection and retry.',
+    });
+  }
+});
+
+// Reverse Geocoding API v4 proxy (lat/lng -> formattedAddress + placeId)
+app.post('/api/maps/reverse-geocode', requireAuth, async (req, res) => {
+  const apiKey = getGoogleMapsApiKey();
+  if (!apiKey) {
+    res.status(503).json({
+      error:
+        'Google Maps API key is not configured on the server. Add GOOGLE_MAPS_API_KEY in Settings > Secrets.',
+      missingMapsKey: true,
+    });
+    return;
+  }
+
+  const { lat, lng } = req.body as { lat?: number; lng?: number };
+  if (
+    typeof lat !== 'number' ||
+    typeof lng !== 'number' ||
+    Number.isNaN(lat) ||
+    Number.isNaN(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    res.status(400).json({ error: 'Valid latitude and longitude coordinates are required.' });
+    return;
+  }
+
+  try {
+    const url = new URL('https://geocode.googleapis.com/v4/geocode/location');
+    url.searchParams.set('location.latitude', String(lat));
+    url.searchParams.set('location.longitude', String(lng));
+    url.searchParams.set('languageCode', 'en');
+
+    const resp = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'results.placeId,results.formattedAddress',
+        'X-Goog-Maps-Solution-ID': GMP_SOLUTION_ID,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      if (isMapsQuotaError(resp.status, rawText)) {
+        res.status(429).json({
+          error: 'Google Maps daily free-tier quota exceeded.',
+          quotaExceeded: true,
+        });
+        return;
+      }
+      res.status(resp.status >= 400 && resp.status < 500 ? resp.status : 502).json({
+        error: 'Could not look up the street address for this pin location.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(rawText) as {
+      results?: Array<{
+        placeId?: string;
+        formattedAddress?: string;
+      }>;
+    };
+
+    const first = data.results?.[0];
+    if (!first?.formattedAddress) {
+      res.json({
+        lat,
+        lng,
+        formattedAddress: '',
+        placeId: '',
+        noAddressFound: true,
+      });
+      return;
+    }
+
+    res.json({
+      lat,
+      lng,
+      formattedAddress: first.formattedAddress,
+      placeId: first.placeId || '',
+      noAddressFound: false,
+    });
+  } catch (err) {
+    console.error('Reverse geocode proxy error:', err);
+    res.status(502).json({
+      error: 'Could not reach Google Geocoding service. Please try again.',
+    });
+  }
+});
+
+// Places API (New) Text Search proxy for genuine nearby NGOs, food banks, orphanages & community kitchens
+app.post('/api/maps/nearby-charities', requireAuth, async (req, res) => {
+  const apiKey = getGoogleMapsApiKey();
+  if (!apiKey) {
+    res.status(503).json({
+      error:
+        'Google Maps API key is not configured on the server. Add GOOGLE_MAPS_API_KEY in Settings > Secrets.',
+      missingMapsKey: true,
+    });
+    return;
+  }
+
+  const { lat, lng, radiusMeters } = req.body as {
+    lat?: number;
+    lng?: number;
+    radiusMeters?: number;
+  };
+
+  if (
+    typeof lat !== 'number' ||
+    typeof lng !== 'number' ||
+    Number.isNaN(lat) ||
+    Number.isNaN(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    res.status(400).json({ error: 'Valid pickup latitude and longitude coordinates are required.' });
+    return;
+  }
+
+  const safeRadius =
+    typeof radiusMeters === 'number' && !Number.isNaN(radiusMeters)
+      ? Math.min(50000, Math.max(1000, Math.round(radiusMeters)))
+      : 15000;
+
+  const cacheKey = `${lat.toFixed(3)}:${lng.toFixed(3)}:${safeRadius}`;
+  const now = Date.now();
+  const cached = nearbyCharitiesCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    res.json({ organisations: cached.organisations, cached: true });
+    return;
+  }
+
+  interface RawPlaceItem {
+    id?: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
+    primaryTypeDisplayName?: { text?: string };
+    googleMapsUri?: string;
+    googleMapsLinks?: {
+      placeUri?: string;
+      directionsUri?: string;
+    };
+    nationalPhoneNumber?: string;
+    internationalPhoneNumber?: string;
+    websiteUri?: string;
+  }
+
+  async function runTextSearch(textQuery: string): Promise<{
+    places: RawPlaceItem[];
+    quotaExceeded?: boolean;
+    errorStatus?: number;
+  }> {
+    const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask':
+          'places.id,places.displayName,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.googleMapsUri,places.googleMapsLinks,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri',
+        'X-Goog-Maps-Solution-ID': GMP_SOLUTION_ID,
+      },
+      body: JSON.stringify({
+        textQuery,
+        pageSize: 15,
+        languageCode: 'en',
+        locationBias: {
+          circle: {
+            center: { latitude: lat, longitude: lng },
+            radius: safeRadius,
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      if (isMapsQuotaError(resp.status, rawText)) {
+        return { places: [], quotaExceeded: true, errorStatus: 429 };
+      }
+      return { places: [], errorStatus: resp.status };
+    }
+
+    const parsed = JSON.parse(rawText) as { places?: RawPlaceItem[] };
+    return { places: Array.isArray(parsed.places) ? parsed.places : [] };
+  }
+
+  try {
+    const primary = await runTextSearch('charity food bank NGO orphanage community kitchen');
+    if (primary.quotaExceeded) {
+      res.status(429).json({
+        error: 'Google Maps daily free-tier quota exceeded.',
+        quotaExceeded: true,
+      });
+      return;
+    }
+    if (primary.errorStatus) {
+      res.status(502).json({
+        error: 'Could not search nearby charity organisations via Google Places API.',
+      });
+      return;
+    }
+
+    const combinedMap = new Map<string, RawPlaceItem>();
+    for (const p of primary.places) {
+      if (p.id) combinedMap.set(p.id, p);
+    }
+
+    // Only issue a secondary query if fewer than 3 matches came back
+    if (combinedMap.size < 3) {
+      const secondary = await runTextSearch('nonprofit charitable trust food pantry shelter');
+      if (secondary.quotaExceeded) {
+        res.status(429).json({
+          error: 'Google Maps daily free-tier quota exceeded.',
+          quotaExceeded: true,
+        });
+        return;
+      }
+      for (const p of secondary.places) {
+        if (p.id && !combinedMap.has(p.id)) {
+          combinedMap.set(p.id, p);
+        }
+      }
+    }
+
+    const organisations = Array.from(combinedMap.values())
+      .filter(
+        (p) =>
+          typeof p.id === 'string' &&
+          p.id.length > 0 &&
+          typeof p.displayName?.text === 'string' &&
+          p.displayName.text.trim().length > 0 &&
+          typeof p.location?.latitude === 'number' &&
+          typeof p.location?.longitude === 'number'
+      )
+      .map((p) => {
+        const pLat = p.location!.latitude!;
+        const pLng = p.location!.longitude!;
+        const placeId = p.id!;
+        const distanceMeters = haversineDistanceMeters(lat, lng, pLat, pLng);
+        const rawPhone = (p.nationalPhoneNumber || p.internationalPhoneNumber || '').trim();
+        const rawMapsUri = (p.googleMapsUri || p.googleMapsLinks?.placeUri || '').trim();
+        const rawDirectionsUri = (p.googleMapsLinks?.directionsUri || '').trim();
+        const rawWebsite = (p.websiteUri || '').trim();
+
+        const safeGoogleMapsUri =
+          rawMapsUri.startsWith('https://')
+            ? rawMapsUri.slice(0, 500)
+            : `https://www.google.com/maps/search/?api=1&query=${pLat},${pLng}&query_place_id=${encodeURIComponent(placeId)}`;
+
+        const safeDirectionsUri =
+          rawDirectionsUri.startsWith('https://')
+            ? rawDirectionsUri.slice(0, 500)
+            : `https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${pLat},${pLng}&destination_place_id=${encodeURIComponent(placeId)}`;
+
+        const safeWebsiteUri = /^https?:\/\/[^\s]+$/i.test(rawWebsite)
+          ? rawWebsite.slice(0, 500)
+          : undefined;
+
+        return {
+          placeId: placeId.slice(0, 200),
+          name: p.displayName!.text!.trim().slice(0, 160),
+          address: (p.formattedAddress || `${pLat.toFixed(5)}, ${pLng.toFixed(5)}`)
+            .trim()
+            .slice(0, 300),
+          ...(rawPhone ? { phone: rawPhone.slice(0, 40) } : {}),
+          category: (p.primaryTypeDisplayName?.text || 'Charity & Food Relief')
+            .trim()
+            .slice(0, 80),
+          latitude: pLat,
+          longitude: pLng,
+          distanceMeters,
+          googleMapsUri: safeGoogleMapsUri,
+          directionsUri: safeDirectionsUri,
+          ...(safeWebsiteUri ? { websiteUri: safeWebsiteUri } : {}),
+        };
+      })
+      .sort((a, b) => a.distanceMeters - b.distanceMeters)
+      .slice(0, 12);
+
+    // Maintain a bounded 5-minute cache to stay friendly to GHP daily quota
+    if (nearbyCharitiesCache.size >= 50) {
+      const oldestKey = nearbyCharitiesCache.keys().next().value;
+      if (oldestKey) nearbyCharitiesCache.delete(oldestKey);
+    }
+    nearbyCharitiesCache.set(cacheKey, {
+      expiresAt: now + 5 * 60 * 1000,
+      organisations,
+    });
+
+    res.json({ organisations, cached: false });
+  } catch (err) {
+    console.error('Nearby charities search error:', err);
+    res.status(502).json({
+      error: 'Could not search nearby charity organisations right now. Please try again.',
     });
   }
 });
