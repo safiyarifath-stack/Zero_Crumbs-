@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-export type OtpPurpose = 'signup' | 'verify-existing';
+export type OtpPurpose = 'signup' | 'verify-existing' | 'otp-verification';
 
 export interface OtpChallengeRecord {
   email: string;
@@ -163,6 +163,75 @@ export async function defaultSendEmail(payload: EmailSendPayload): Promise<{ pro
   throw new EmailServiceNotConfiguredError();
 }
 
+export class GmailAuthRequiredError extends Error {
+  readonly code = 'GMAIL_AUTH_REQUIRED';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+function sanitizeMimeHeader(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
+export async function sendOtpViaGmailApi(
+  gmailAccessToken: string,
+  payload: EmailSendPayload
+): Promise<{ provider: string }> {
+  const token = gmailAccessToken.trim();
+  if (!token || /[\r\n\s]/.test(token)) {
+    throw new GmailAuthRequiredError(
+      'Your Gmail connection is missing or invalid. Sign in with Google again to send the verification OTP.'
+    );
+  }
+
+  const safeTo = sanitizeMimeHeader(payload.to);
+  const safeSubject = sanitizeMimeHeader(payload.subject);
+  const mimeMessage = [
+    `To: ${safeTo}`,
+    `Subject: ${safeSubject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    payload.text,
+  ].join('\r\n');
+
+  const raw = Buffer.from(mimeMessage, 'utf-8').toString('base64url');
+  const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    signal: AbortSignal.timeout(12000),
+    body: JSON.stringify({ raw }),
+  });
+
+  if (resp.status === 401) {
+    throw new GmailAuthRequiredError(
+      'Your Gmail session expired. Please reconnect with Google to send the verification OTP.'
+    );
+  }
+
+  if (resp.status === 403) {
+    throw new GmailAuthRequiredError(
+      'Gmail send permission was not granted. Please reconnect with Google and allow sending verification emails.'
+    );
+  }
+
+  if (!resp.ok) {
+    const errBody = (await resp.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    throw new Error(
+      errBody?.error?.message || `Gmail OTP delivery failed (HTTP ${resp.status}).`
+    );
+  }
+
+  return { provider: 'gmail-oauth' };
+}
+
 export class EmailOtpService {
   private challenges = new Map<string, OtpChallengeRecord>();
   private emailSendHistory = new Map<string, number[]>();
@@ -190,6 +259,7 @@ export class EmailOtpService {
     purpose: OtpPurpose;
     fullName?: string;
     ip?: string;
+    gmailAccessToken?: string;
   }): Promise<
     | {
         ok: true;
@@ -295,7 +365,10 @@ export class EmailOtpService {
     `;
 
     try {
-      const sent = await this.sender({ to: email, subject, text, html });
+      const sent =
+        params.gmailAccessToken && params.gmailAccessToken.trim()
+          ? await sendOtpViaGmailApi(params.gmailAccessToken, { to: email, subject, text, html })
+          : await this.sender({ to: email, subject, text, html });
       this.challenges.set(key, {
         email,
         purpose: params.purpose,
@@ -318,6 +391,14 @@ export class EmailOtpService {
         provider: sent.provider,
       };
     } catch (err) {
+      if (err instanceof GmailAuthRequiredError) {
+        return {
+          ok: false,
+          status: 401,
+          code: 'GMAIL_AUTH_REQUIRED',
+          error: err.message,
+        };
+      }
       if (err instanceof EmailServiceNotConfiguredError) {
         return {
           ok: false,

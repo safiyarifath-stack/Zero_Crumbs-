@@ -31,6 +31,7 @@ import {
   updateDonationRequestStatus,
   updateUserProfile,
 } from './services/firestoreService';
+import { clearGmailAccessToken } from './services/gmailService';
 import type {
   ActivityLog,
   AiActionRecord,
@@ -117,6 +118,7 @@ function ZeroCrumbsWorkspace() {
   }
 
   function clearSessionWorkspaceState() {
+    clearGmailAccessToken();
     setVerifiedUid(null);
     setProfileReadyUid(null);
     setProfileSyncError('');
@@ -395,6 +397,7 @@ function ZeroCrumbsWorkspace() {
   async function handleConfirmLogout() {
     setLogoutLoading(true);
     try {
+      clearGmailAccessToken();
       await signOut(auth);
       clearSessionWorkspaceState();
       setLogoutConfirmOpen(false);

@@ -246,7 +246,7 @@ app.get('/api/auth/otp-status', (_req, res) => {
   res.json(status);
 });
 
-// Send 6-digit Email OTP (signup or existing unverified email verification)
+// Send 6-digit Email OTP (signup, existing unverified email, or authenticated OTP verification)
 app.post('/api/auth/send-otp', async (req, res) => {
   const { email, fullName, purpose } = req.body as {
     email?: string;
@@ -254,17 +254,42 @@ app.post('/api/auth/send-otp', async (req, res) => {
     purpose?: OtpPurpose;
   };
   const safePurpose: OtpPurpose =
-    purpose === 'verify-existing' ? 'verify-existing' : 'signup';
+    purpose === 'verify-existing'
+      ? 'verify-existing'
+      : purpose === 'otp-verification'
+        ? 'otp-verification'
+        : 'signup';
+
+  let targetEmail = typeof email === 'string' ? email : '';
+
+  if (safePurpose === 'otp-verification') {
+    const authUser = await verifyFirebaseBearerToken(req);
+    if (!authUser) {
+      res.status(401).json({ error: 'Authentication required to send verification OTP.' });
+      return;
+    }
+    if (!authUser.email) {
+      res.status(400).json({ error: 'No email address is associated with this account.' });
+      return;
+    }
+    targetEmail = authUser.email;
+  }
+
+  const rawGmailHeader = req.headers['x-gmail-access-token'];
+  const gmailAccessToken =
+    typeof rawGmailHeader === 'string' && rawGmailHeader.trim() ? rawGmailHeader.trim() : undefined;
+
   const clientIp =
     (typeof req.headers['x-forwarded-for'] === 'string'
       ? req.headers['x-forwarded-for'].split(',')[0].trim()
       : req.ip) || 'unknown';
 
   const result = await emailOtpService.sendOtp({
-    email: typeof email === 'string' ? email : '',
+    email: targetEmail,
     fullName: typeof fullName === 'string' ? fullName : '',
     purpose: safePurpose,
     ip: clientIp,
+    gmailAccessToken,
   });
 
   if (!result.ok) {
@@ -286,17 +311,31 @@ app.post('/api/auth/send-otp', async (req, res) => {
 });
 
 // Verify 6-digit Email OTP securely on the server
-app.post('/api/auth/verify-otp', (req, res) => {
+app.post('/api/auth/verify-otp', async (req, res) => {
   const { email, otp, purpose } = req.body as {
     email?: string;
     otp?: string;
     purpose?: OtpPurpose;
   };
   const safePurpose: OtpPurpose =
-    purpose === 'verify-existing' ? 'verify-existing' : 'signup';
+    purpose === 'verify-existing'
+      ? 'verify-existing'
+      : purpose === 'otp-verification'
+        ? 'otp-verification'
+        : 'signup';
+
+  let targetEmail = typeof email === 'string' ? email : '';
+  if (safePurpose === 'otp-verification') {
+    const authUser = await verifyFirebaseBearerToken(req);
+    if (!authUser || !authUser.email) {
+      res.status(401).json({ error: 'Authentication required to verify OTP.' });
+      return;
+    }
+    targetEmail = authUser.email;
+  }
 
   const result = emailOtpService.verifyOtp({
-    email: typeof email === 'string' ? email : '',
+    email: targetEmail,
     otp: typeof otp === 'string' ? otp : '',
     purpose: safePurpose,
   });

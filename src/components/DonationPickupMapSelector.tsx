@@ -281,6 +281,15 @@ export function DonationPickupMapSelector({
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [mapError, setMapError] = useState('');
+  const [embeddedGeoBlocked, setEmbeddedGeoBlocked] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const [charities, setCharities] = useState<NearbyCharityOrganisation[]>([]);
   const [searchingCharities, setSearchingCharities] = useState(false);
@@ -367,10 +376,37 @@ export function DonationPickupMapSelector({
 
   const reverseGeocodeCoords = useCallback(
     async (lat: number, lng: number) => {
+      if (!isMountedRef.current) return;
       setGeocoding(true);
       setMapError('');
+      setEmbeddedGeoBlocked(false);
       setMapCenter({ lat, lng });
       setDesiredZoom(16);
+
+      const fallbackCoordsLabel = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+      const tryClientGeocoder = async (): Promise<{
+        address: string;
+        placeId?: string;
+      } | null> => {
+        if (typeof window === 'undefined' || !window.google?.maps?.Geocoder) {
+          return null;
+        }
+        try {
+          const geocoder = new window.google.maps.Geocoder();
+          const geoRes = await geocoder.geocode({ location: { lat, lng } });
+          const best = geoRes.results?.[0];
+          if (best?.formatted_address) {
+            return {
+              address: best.formatted_address,
+              placeId: best.place_id || undefined,
+            };
+          }
+        } catch {
+          // Ignore client geocoder fallback error
+        }
+        return null;
+      };
 
       try {
         const headers = await getAuthHeaders();
@@ -386,38 +422,76 @@ export function DonationPickupMapSelector({
           error?: string;
           quotaExceeded?: boolean;
         };
+        if (!isMountedRef.current) return;
+
         if (!resp.ok) {
           emitQuotaExceededIfNeeded(resp.status, data);
-          setMapError(data.error || 'Could not resolve the street address for this pin.');
+          const clientHit = await tryClientGeocoder();
+          if (!isMountedRef.current) return;
+          const address = clientHit?.address || fallbackCoordsLabel;
+          setSearchQuery(address);
           onChangeLocation({
-            address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+            address,
             latitude: lat,
             longitude: lng,
+            placeId: clientHit?.placeId,
             confirmed: false,
           });
+          if (!clientHit) {
+            setMapError(data.error || 'Could not resolve the street address for this pin.');
+          }
           return;
         }
-        const resolvedAddress =
+
+        let resolvedAddress =
           data.formattedAddress && data.formattedAddress.trim()
             ? data.formattedAddress.trim()
-            : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        setSearchQuery(resolvedAddress);
+            : '';
+        let resolvedPlaceId = data.placeId || undefined;
+
+        if (!resolvedAddress) {
+          const clientHit = await tryClientGeocoder();
+          if (!isMountedRef.current) return;
+          if (clientHit?.address) {
+            resolvedAddress = clientHit.address;
+            resolvedPlaceId = resolvedPlaceId || clientHit.placeId;
+          }
+        }
+
+        const finalAddress = resolvedAddress || fallbackCoordsLabel;
+        setSearchQuery(finalAddress);
         onChangeLocation({
-          address: resolvedAddress,
+          address: finalAddress,
           latitude: lat,
           longitude: lng,
-          placeId: data.placeId || undefined,
+          placeId: resolvedPlaceId,
           confirmed: false,
         });
-        if (data.noAddressFound) {
+        if (!resolvedAddress && data.noAddressFound) {
           setMapError(
             'Pin placed, but no street address was returned for that exact spot. Adjust the pin slightly closer to a road.'
           );
         }
       } catch {
-        setMapError('Could not fetch the street address. Please check your connection.');
+        if (!isMountedRef.current) return;
+        const clientHit = await tryClientGeocoder();
+        if (!isMountedRef.current) return;
+        const address = clientHit?.address || fallbackCoordsLabel;
+        setSearchQuery(address);
+        onChangeLocation({
+          address,
+          latitude: lat,
+          longitude: lng,
+          placeId: clientHit?.placeId,
+          confirmed: false,
+        });
+        if (!clientHit) {
+          setMapError('Could not fetch the street address. Pin coordinates were kept—please verify or adjust manually.');
+        }
       } finally {
-        setGeocoding(false);
+        if (isMountedRef.current) {
+          setGeocoding(false);
+        }
       }
     },
     [onChangeLocation]
@@ -431,6 +505,7 @@ export function DonationPickupMapSelector({
     }
     setGeocoding(true);
     setMapError('');
+    setEmbeddedGeoBlocked(false);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch('/api/maps/geocode', {
@@ -471,32 +546,109 @@ export function DonationPickupMapSelector({
 
   const handleUseCurrentLocation = useCallback(() => {
     setMapError('');
-    if (!('geolocation' in navigator)) {
-      setMapError('Geolocation is not supported by your browser. Please search an address instead.');
+    setEmbeddedGeoBlocked(false);
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setMapError(
+        'Geolocation is not supported by your browser. Please search your address or click on the map manually.'
+      );
       return;
     }
+
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setMapError(
+        'Current location detection requires HTTPS or localhost. Open this app over HTTPS (or localhost), or search your address manually.'
+      );
+      return;
+    }
+
+    const applyGeolocationError = (err: GeolocationPositionError) => {
+      if (!isMountedRef.current) return;
+      setLocating(false);
+      const rawMsg = (err.message || '').toLowerCase();
+
+      if (err.code === err.PERMISSION_DENIED) {
+        const isPolicyBlocked =
+          rawMsg.includes('permissions policy') ||
+          rawMsg.includes('feature policy') ||
+          rawMsg.includes('disabled in this document');
+        const isInsecureOrigin = rawMsg.includes('secure origin');
+
+        if (isPolicyBlocked) {
+          const inIframe = typeof window !== 'undefined' && window.self !== window.top;
+          setEmbeddedGeoBlocked(inIframe);
+          setMapError(
+            inIframe
+              ? 'Location access is blocked by the embedded preview frame’s permissions policy. Open this app in a full HTTPS browser tab to use GPS detection, or search your address / drop a pin manually below.'
+              : 'Location access is blocked by browser permissions policy. Enable location permissions or search your address manually.'
+          );
+        } else if (isInsecureOrigin) {
+          setMapError(
+            'Current location requires HTTPS or localhost. Open the app over HTTPS (or localhost), or search your address manually.'
+          );
+        } else {
+          setMapError(
+            'Location permission was denied. Click the lock or site-settings icon in your browser’s address bar to allow Location access and retry, or search your address / drop a pin manually.'
+          );
+        }
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        setMapError(
+          'Your location is currently unavailable (GPS or network positioning could not determine your coordinates). Check that device location services are enabled, or search your address / drop a pin manually.'
+        );
+      } else if (err.code === err.TIMEOUT) {
+        setMapError(
+          'Location request timed out before coordinates were returned. Please try again, or search your address / drop a pin manually.'
+        );
+      } else {
+        setMapError(
+          'Could not detect your current location. Please search your address or click on the map manually.'
+        );
+      }
+    };
+
+    const handlePositionSuccess = (pos: GeolocationPosition) => {
+      if (!isMountedRef.current) return;
+      const { latitude, longitude } = pos.coords;
+      setLocating(false);
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setMapError('Received invalid coordinates from browser geolocation. Please drop a pin manually.');
+        return;
+      }
+
+      // Immediately center map and place marker on retrieved coordinates while reverse-geocoding runs
+      setMapCenter({ lat: latitude, lng: longitude });
+      setDesiredZoom(16);
+      onChangeLocation({
+        address: `Detecting street address (${latitude.toFixed(5)}, ${longitude.toFixed(5)})...`,
+        latitude,
+        longitude,
+        confirmed: false,
+      });
+
+      void reverseGeocodeCoords(latitude, longitude);
+    };
+
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        const { latitude, longitude } = pos.coords;
-        void reverseGeocodeCoords(latitude, longitude);
-      },
+      handlePositionSuccess,
       (err) => {
-        setLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          setMapError(
-            'Location permission was denied. Allow location access in your browser or search your address manually.'
+        if (!isMountedRef.current) return;
+        // On desktop/laptop devices without GPS hardware, high-accuracy mode can fail with
+        // POSITION_UNAVAILABLE or TIMEOUT; retry once with standard network/Wi-Fi positioning.
+        if (err.code === err.POSITION_UNAVAILABLE || err.code === err.TIMEOUT) {
+          navigator.geolocation.getCurrentPosition(
+            handlePositionSuccess,
+            applyGeolocationError,
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
           );
-        } else if (err.code === err.TIMEOUT) {
-          setMapError('Timed out detecting your location. Please try again or search manually.');
-        } else {
-          setMapError('Could not detect your current location. Please drop a pin or search manually.');
+          return;
         }
+        applyGeolocationError(err);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );
-  }, [reverseGeocodeCoords]);
+  }, [onChangeLocation, reverseGeocodeCoords]);
 
   const handleConfirmLocation = () => {
     if (!value) {
@@ -579,6 +731,7 @@ export function DonationPickupMapSelector({
             searching={geocoding}
             onPickSuggestion={({ lat, lng, address, placeId }) => {
               setMapError('');
+              setEmbeddedGeoBlocked(false);
               setMapCenter({ lat, lng });
               setDesiredZoom(16);
               onChangeLocation({
@@ -593,8 +746,22 @@ export function DonationPickupMapSelector({
           />
 
           {mapError && (
-            <div className="p-2.5 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F]">
-              {mapError}
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+            >
+              <span>{mapError}</span>
+              {embeddedGeoBlocked && typeof window !== 'undefined' && (
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-[#EBC6BA] text-[11px] font-semibold text-[#9E2F2F] hover:bg-[#FAF9F6] shrink-0 self-start sm:self-auto"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open in New Tab
+                </a>
+              )}
             </div>
           )}
 
@@ -747,7 +914,7 @@ export function DonationPickupMapSelector({
                 ) : (
                   <button
                     type="button"
-                    disabled={geocoding}
+                    disabled={geocoding || locating}
                     onClick={handleConfirmLocation}
                     className="px-4 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   >
