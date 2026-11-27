@@ -30,15 +30,15 @@ export function ActivityHistoryView({ logs, aiActions }: ActivityHistoryViewProp
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-[#1A2820]">
+          <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
             Consumption & Activity History
           </h1>
-          <p className="text-sm text-[#5A6A60]">
+          <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
             Persistent cloud record of every food update, donation milestone, and Zero Crumbs AI action.
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-[#EFEFE9] rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 p-1 bg-[#EFEFE9] dark:bg-[#121B16] rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar">
           {(
             [
               { key: 'all', label: 'All Activity' },
@@ -53,8 +53,8 @@ export function ActivityHistoryView({ logs, aiActions }: ActivityHistoryViewProp
               onClick={() => setFilter(tab.key)}
               className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 filter === tab.key
-                  ? 'bg-white text-[#1A2820] shadow-xs'
-                  : 'text-[#5A6A60] hover:text-[#1A2820]'
+                  ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+                  : 'text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED]'
               }`}
             >
               {tab.label}
@@ -65,32 +65,36 @@ export function ActivityHistoryView({ logs, aiActions }: ActivityHistoryViewProp
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Activity Feed */}
-        <div className="lg:col-span-2 bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#ECEEE8] flex items-center justify-between">
-            <h2 className="font-display text-sm font-semibold text-[#1A2820]">Activity Timeline</h2>
-            <span className="font-mono text-xs tabular-nums text-[#5A6A60]">
+        <div className="lg:col-span-2 bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#ECEEE8] dark:border-[#24322B] flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
+              Activity Timeline
+            </h2>
+            <span className="font-mono text-xs tabular-nums text-[#5A6A60] dark:text-[#9CB0A4]">
               {filteredLogs.length} events
             </span>
           </div>
 
           {filteredLogs.length === 0 ? (
             <div className="p-10 text-center">
-              <History className="w-7 h-7 text-[#6B7A70] mx-auto mb-2.5" />
-              <p className="text-sm font-medium text-[#1A2820] mb-1">No activity recorded yet</p>
-              <p className="text-xs text-[#5A6A60]">
+              <History className="w-7 h-7 text-[#6B7A70] dark:text-[#90A498] mx-auto mb-2.5" />
+              <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED] mb-1">
+                No activity recorded yet
+              </p>
+              <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                 Actions you or Zero Crumbs AI take will be saved here automatically.
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-[#ECEEE8]">
+            <div className="divide-y divide-[#ECEEE8] dark:divide-[#24322B]">
               {filteredLogs.map((log) => (
                 <div key={log.id} className="p-4 sm:px-5 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
                     <div
                       className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                         log.source === 'ai'
-                          ? 'bg-[#FBE8DC] text-[#7D3A24]'
-                          : 'bg-[#EEF3EC] text-[#1B4332]'
+                          ? 'bg-[#FBE8DC] dark:bg-[#3A221A] text-[#7D3A24] dark:text-[#F2A085]'
+                          : 'bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5]'
                       }`}
                     >
                       {log.source === 'ai' ? (
@@ -100,18 +104,20 @@ export function ActivityHistoryView({ logs, aiActions }: ActivityHistoryViewProp
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-[#1A2820]">
+                      <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED]">
                         {formatActionLabel(log.action)} ·{' '}
                         <span className="font-semibold">{log.itemName}</span>
                       </p>
-                      <p className="text-xs text-[#4F5E55] mt-0.5">{log.details}</p>
+                      <p className="text-xs text-[#4F5E55] dark:text-[#9CB0A4] mt-0.5">
+                        {log.details}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[11px] font-mono tabular-nums text-[#5A6A60]">
+                    <p className="text-[11px] font-mono tabular-nums text-[#5A6A60] dark:text-[#9CB0A4]">
                       {formatTimestamp(log.createdAt)}
                     </p>
-                    <p className="text-[11px] text-[#6B7A70]">
+                    <p className="text-[11px] text-[#6B7A70] dark:text-[#869B8F]">
                       {log.source === 'ai' ? 'Zero Crumbs AI' : 'Manual'}
                     </p>
                   </div>
@@ -122,45 +128,47 @@ export function ActivityHistoryView({ logs, aiActions }: ActivityHistoryViewProp
         </div>
 
         {/* AI Action Audit Trail */}
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden h-fit">
-          <div className="px-5 py-4 border-b border-[#ECEEE8] flex items-center justify-between">
-            <h2 className="font-display text-sm font-semibold text-[#1A2820]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl overflow-hidden h-fit">
+          <div className="px-5 py-4 border-b border-[#ECEEE8] dark:border-[#24322B] flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
               AI Execution Records
             </h2>
-            <span className="font-mono text-xs tabular-nums text-[#5A6A60]">
+            <span className="font-mono text-xs tabular-nums text-[#5A6A60] dark:text-[#9CB0A4]">
               {aiActions.length}
             </span>
           </div>
 
           {aiActions.length === 0 ? (
-            <div className="p-6 text-center text-xs text-[#5A6A60]">
+            <div className="p-6 text-center text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
               Confirmed and cancelled Zero Crumbs AI actions appear here.
             </div>
           ) : (
-            <div className="divide-y divide-[#ECEEE8] max-h-[540px] overflow-y-auto">
+            <div className="divide-y divide-[#ECEEE8] dark:divide-[#24322B] max-h-[540px] overflow-y-auto">
               {aiActions.map((act) => (
                 <div key={act.id} className="p-4 space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#1A2820] capitalize">
+                    <span className="text-xs font-semibold text-[#1A2820] dark:text-[#EBF2ED] capitalize">
                       {act.actionType.replace(/_/g, ' ')}
                     </span>
                     <span
                       className={`text-[11px] font-medium capitalize ${
                         act.status === 'confirmed'
-                          ? 'text-[#1B4332]'
+                          ? 'text-[#1B4332] dark:text-[#82C9A5]'
                           : act.status === 'failed'
-                            ? 'text-[#B83B3B]'
-                            : 'text-[#6B7A70]'
+                            ? 'text-[#B83B3B] dark:text-[#FCA5A5]'
+                            : 'text-[#6B7A70] dark:text-[#90A498]'
                       }`}
                     >
                       {act.status}
                     </span>
                   </div>
-                  <p className="text-xs text-[#4F5E55]">{act.summary}</p>
+                  <p className="text-xs text-[#4F5E55] dark:text-[#9CB0A4]">{act.summary}</p>
                   {act.errorMessage && (
-                    <p className="text-[11px] text-[#B83B3B]">{act.errorMessage}</p>
+                    <p className="text-[11px] text-[#B83B3B] dark:text-[#FCA5A5]">
+                      {act.errorMessage}
+                    </p>
                   )}
-                  <p className="text-[11px] font-mono tabular-nums text-[#6B7A70]">
+                  <p className="text-[11px] font-mono tabular-nums text-[#6B7A70] dark:text-[#869B8F]">
                     {formatTimestamp(act.createdAt)}
                   </p>
                 </div>

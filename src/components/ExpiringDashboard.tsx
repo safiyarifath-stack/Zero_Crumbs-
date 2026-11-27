@@ -176,28 +176,28 @@ export function ExpiringDashboard({
   ) {
     const toneClass =
       variant === 'expired'
-        ? 'text-[#B83B3B]'
+        ? 'text-[#B83B3B] dark:text-[#F29A9A]'
         : variant === 'today'
-          ? 'text-[#B56A1B]'
-          : 'text-[#8C6423]';
+          ? 'text-[#B56A1B] dark:text-[#E8B173]'
+          : 'text-[#8C6423] dark:text-[#DFB676]';
 
     return (
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#E5E7E2]">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#E5E7E2] dark:border-[#27362E]">
           <div>
-            <h2 className="font-display text-lg font-semibold text-[#1A2820] flex items-center gap-2">
+            <h2 className="font-display text-lg font-semibold text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-2">
               <span>{title}</span>
               <span className={`font-mono text-sm tabular-nums ${toneClass}`}>
                 ({items.length})
               </span>
             </h2>
-            <p className="text-xs text-[#5A6A60]">{subtitle}</p>
+            <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">{subtitle}</p>
           </div>
           {variant !== 'expired' && items.length > 0 && (
             <button
               type="button"
               onClick={() => onAskAiForRecipes(items)}
-              className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFE9DC] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] dark:bg-[#20342A] text-[#1B4332] dark:text-[#9CE0B8] text-xs font-medium hover:bg-[#DFE9DC] dark:hover:bg-[#284235] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Suggest Recipes with Zero Crumbs AI
@@ -206,7 +206,7 @@ export function ExpiringDashboard({
         </div>
 
         {items.length === 0 ? (
-          <div className="bg-white border border-[#E5E7E2] rounded-2xl p-6 text-sm text-[#5A6A60]">
+          <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6 text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
             No items in this category right now.
           </div>
         ) : (
@@ -214,22 +214,22 @@ export function ExpiringDashboard({
             {items.map((item) => (
               <div
                 key={item.id}
-                className="bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden flex flex-col"
+                className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl overflow-hidden flex flex-col"
               >
-                <div className="aspect-[16/9] bg-[#F2F4EF]">
+                <div className="aspect-[16/9] bg-[#F2F4EF] dark:bg-[#131C17]">
                   <FoodImage src={item.imageUrl} alt={item.name} />
                 </div>
                 <div className="p-4 flex-1 flex flex-col justify-between gap-4">
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="font-display text-base font-semibold text-[#1A2820]">
+                      <h3 className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                         {item.name}
                       </h3>
-                      <span className="font-mono text-xs font-medium tabular-nums text-[#1A2820]">
+                      <span className="font-mono text-xs font-medium tabular-nums text-[#1A2820] dark:text-[#EBF2ED]">
                         {formatQuantity(item.quantity, item.unit)}
                       </span>
                     </div>
-                    <p className="text-xs text-[#5A6A60] mb-2">
+                    <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mb-2">
                       {item.location} · {item.category} · {formatShortDate(item.expiryDate)}
                     </p>
                     <p className={`text-xs font-medium flex items-center gap-1.5 ${toneClass}`}>
@@ -240,7 +240,7 @@ export function ExpiringDashboard({
                       )}
                       {formatExpiryStatus(item.expiryDate)}
                     </p>
-                    <p className="mt-2 text-xs text-[#4F5E55]">
+                    <p className="mt-2 text-xs text-[#4F5E55] dark:text-[#A5B7AC]">
                       {variant === 'expired'
                         ? 'Suggested action: Do not eat or donate expired food. Compost or discard safely.'
                         : variant === 'today'
@@ -249,7 +249,7 @@ export function ExpiringDashboard({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-3 border-t border-[#ECEEE8]">
+                  <div className="flex items-center gap-2 pt-3 border-t border-[#ECEEE8] dark:border-[#24322B]">
                     {variant === 'expired' ? (
                       <button
                         type="button"
@@ -264,14 +264,14 @@ export function ExpiringDashboard({
                         <button
                           type="button"
                           onClick={() => onUseFood(item)}
-                          className="flex-1 py-2 px-3 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors cursor-pointer"
+                          className="flex-1 py-2 px-3 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer"
                         >
                           Use Food
                         </button>
                         <button
                           type="button"
                           onClick={() => onDonateFood(item)}
-                          className="py-2 px-3 rounded-xl border border-[#DCE0D8] text-xs font-medium text-[#34443A] hover:bg-[#F4F5F2] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          className="py-2 px-3 rounded-xl border border-[#DCE0D8] dark:border-[#31483B] text-xs font-medium text-[#34443A] dark:text-[#C5D5CC] hover:bg-[#F4F5F2] dark:hover:bg-[#223129] transition-colors inline-flex items-center gap-1 cursor-pointer"
                         >
                           <HeartHandshake className="w-3.5 h-3.5" />
                           Donate
@@ -291,43 +291,45 @@ export function ExpiringDashboard({
   return (
     <div className="space-y-8">
       {/* Header & Summary Strip */}
-      <section className="bg-white border border-[#E5E7E2] rounded-2xl p-6">
+      <section className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           <div>
-            <h1 className="font-display text-2xl font-semibold text-[#1A2820]">
+            <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
               Expiring Food Dashboard
             </h1>
-            <p className="text-sm text-[#5A6A60]">
+            <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
               Real-time expiry tracking calculated against today’s date with safety-first action guidance.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs font-mono tabular-nums">
-            <span className="text-[#B83B3B] font-semibold">
+            <span className="text-[#B83B3B] dark:text-[#F29A9A] font-semibold">
               {expiredItems.length} Expired
             </span>
-            <span className="text-[#C5CCC5]">·</span>
-            <span className="text-[#B56A1B] font-semibold">
+            <span className="text-[#C5CCC5] dark:text-[#3A4C41]">·</span>
+            <span className="text-[#B56A1B] dark:text-[#E8B173] font-semibold">
               {todayItems.length} Expiring Today
             </span>
-            <span className="text-[#C5CCC5]">·</span>
-            <span className="text-[#8C6423] font-semibold">
+            <span className="text-[#C5CCC5] dark:text-[#3A4C41]">·</span>
+            <span className="text-[#8C6423] dark:text-[#DFB676] font-semibold">
               {soonItems.length} Expiring in 1–{threshold} Days
             </span>
           </div>
         </div>
 
         {/* Real 3-Day Reminder Settings */}
-        <div className="pt-5 border-t border-[#ECEEE8] grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="p-4 rounded-xl bg-[#FAF9F6] border border-[#E5E7E2] flex flex-col justify-between gap-3">
+        <div className="pt-5 border-t border-[#ECEEE8] dark:border-[#24322B] grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl bg-[#FAF9F6] dark:bg-[#131C17] border border-[#E5E7E2] dark:border-[#27362E] flex flex-col justify-between gap-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-[#1A2820] flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-[#1B4332]" />
+                <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-[#1B4332] dark:text-[#86B69C]" />
                   Browser Push Notifications ({threshold}-Day Alert)
                 </p>
-                <p className="text-xs text-[#5A6A60] mt-1">
+                <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mt-1">
                   Browser permission:{' '}
-                  <strong className="text-[#1A2820] capitalize">{browserPerm}</strong>
+                  <strong className="text-[#1A2820] dark:text-[#EBF2ED] capitalize">
+                    {browserPerm}
+                  </strong>
                 </p>
               </div>
               <select
@@ -336,7 +338,7 @@ export function ExpiringDashboard({
                 onChange={(e) =>
                   void onUpdateReminderSettings({ reminderDaysBefore: Number(e.target.value) })
                 }
-                className="px-2.5 py-1.5 rounded-lg bg-white border border-[#DCE0D8] text-xs font-medium text-[#1A2820]"
+                className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-xs font-medium text-[#1A2820] dark:text-[#EBF2ED]"
               >
                 <option value={1}>1 day before</option>
                 <option value={2}>2 days before</option>
@@ -349,7 +351,7 @@ export function ExpiringDashboard({
               <button
                 type="button"
                 onClick={() => void handleEnableBrowserNotifications()}
-                className="px-3.5 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer"
               >
                 {browserPerm === 'granted'
                   ? 'Send Real Browser Alert Now'
@@ -358,13 +360,13 @@ export function ExpiringDashboard({
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#FAF9F6] border border-[#E5E7E2] flex flex-col justify-between gap-3">
+          <div className="p-4 rounded-xl bg-[#FAF9F6] dark:bg-[#131C17] border border-[#E5E7E2] dark:border-[#27362E] flex flex-col justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-[#1A2820] flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[#1B4332]" />
+              <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[#1B4332] dark:text-[#86B69C]" />
                 Email Expiry Reminders
               </p>
-              <p className="text-xs text-[#5A6A60] mt-1">
+              <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mt-1">
                 {!emailStatus.loaded
                   ? 'Checking email service configuration...'
                   : !(profile?.email || auth.currentUser?.email)
@@ -383,7 +385,7 @@ export function ExpiringDashboard({
                   !(profile?.email || auth.currentUser?.email)
                 }
                 onClick={() => void handleSendEmailReminder()}
-                className="min-h-[42px] px-3.5 py-2 rounded-xl border border-[#DCE0D8] bg-white text-xs font-medium text-[#1A2820] hover:bg-[#F2F4EF] transition-colors cursor-pointer disabled:opacity-50"
+                className="min-h-[42px] px-3.5 py-2 rounded-xl border border-[#DCE0D8] dark:border-[#31483B] bg-white dark:bg-[#1E2A23] text-xs font-medium text-[#1A2820] dark:text-[#EBF2ED] hover:bg-[#F2F4EF] dark:hover:bg-[#26362E] transition-colors cursor-pointer disabled:opacity-50"
               >
                 {sendingEmail ? 'Sending...' : 'Send Real Expiry Email'}
               </button>
@@ -392,12 +394,12 @@ export function ExpiringDashboard({
         </div>
 
         {reminderNotice && (
-          <div className="mt-4 p-3 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] text-xs text-[#1B4332]">
+          <div className="mt-4 p-3 rounded-xl bg-[#EEF3EC] dark:bg-[#1D3127] border border-[#C7DBC9] dark:border-[#335844] text-xs text-[#1B4332] dark:text-[#9CE0B8]">
             {reminderNotice}
           </div>
         )}
         {reminderError && (
-          <div className="mt-4 p-3 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F] flex items-center gap-2">
+          <div className="mt-4 p-3 rounded-xl bg-[#FDF2EC] dark:bg-[#2B1B18] border border-[#EBC6BA] dark:border-[#5C3128] text-xs text-[#9E2F2F] dark:text-[#F5B0A6] flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{reminderError}</span>
           </div>

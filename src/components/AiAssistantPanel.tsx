@@ -23,10 +23,13 @@ import {
   blobToBase64,
   formatMicrophonePermissionError,
   getSpeechRecognitionConstructor,
+  getVoiceEnvironmentDiagnostics,
   getVoiceSupportInfo,
   hasSpeechSynthesisSupport,
   isMobileOrTouchBrowser,
+  logVoiceDiagnostic,
   pickSupportedRecorderMimeType,
+  queryMicrophonePermissionStatus,
   requestMicrophoneStream,
   speakTextAloud,
   startMicLevelMonitor,
@@ -50,6 +53,7 @@ interface AiAssistantPanelProps {
   mode: 'page' | 'drawer';
   open?: boolean;
   onClose?: () => void;
+  onOpenVoiceSettings?: () => void;
   userId: string;
   profile: UserProfile | null;
   foods: FoodItem[];
@@ -72,6 +76,7 @@ export function AiAssistantPanel({
   mode,
   open = true,
   onClose,
+  onOpenVoiceSettings,
   userId,
   profile,
   foods,
@@ -83,6 +88,7 @@ export function AiAssistantPanel({
 }: AiAssistantPanelProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [errorHint, setErrorHint] = useState('');
   const [missingApiKey, setMissingApiKey] = useState(false);
@@ -129,6 +135,7 @@ export function AiAssistantPanel({
   const resumeTimerRef = useRef<number | null>(null);
   const noSpeechCountRef = useRef(0);
   const finalSpeechTranscriptRef = useRef('');
+  const latestTranscriptRef = useRef('');
   const retriedWithoutStreamRef = useRef(false);
 
   const updateVoiceStage = useCallback((stage: VoiceStage) => {
@@ -211,6 +218,8 @@ export function AiAssistantPanel({
       stopCurrentPlayback();
       releaseMicrophoneHardware();
       setInterimTranscript('');
+      latestTranscriptRef.current = '';
+      finalSpeechTranscriptRef.current = '';
       setSpeechDetected(false);
       if (!options?.preserveError) {
         setVoiceHint('');
@@ -236,13 +245,29 @@ export function AiAssistantPanel({
         const resp = await fetch('/api/ai/status', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!resp.ok) return;
-        const data = (await resp.json()) as { configured?: boolean };
+        if (!resp.ok) {
+          logVoiceDiagnostic('ai_status_http_error', { status: resp.status }, 'warn');
+          return;
+        }
+        const data = (await resp.json()) as {
+          configured?: boolean;
+          environment?: string;
+          protocol?: string;
+        };
+        logVoiceDiagnostic('ai_status_ok', {
+          configured: data.configured,
+          environment: data.environment,
+          protocol: data.protocol,
+        });
         if (!cancelled && data.configured === false) {
           setMissingApiKey(true);
         }
-      } catch {
-        // Ignore transient status check failure
+      } catch (err) {
+        logVoiceDiagnostic(
+          'ai_status_fetch_failed',
+          { message: err instanceof Error ? err.message : String(err) },
+          'warn'
+        );
       }
     }
     void checkAiStatus();
@@ -390,7 +415,7 @@ export function AiAssistantPanel({
       options?: { skipUserBubble?: boolean; speakReply?: boolean }
     ) => {
       const trimmed = textToSend.trim();
-      if (!trimmed || loading) return;
+      if (!trimmed || loadingRef.current) return;
 
       setErrorMsg('');
       setErrorHint('');
@@ -414,6 +439,7 @@ export function AiAssistantPanel({
       }
 
       const voiceSessionId = options?.speakReply ? voiceSessionIdRef.current : undefined;
+      loadingRef.current = true;
       setLoading(true);
       if (options?.speakReply && voiceActiveRef.current) {
         updateVoiceStage('processing');
@@ -429,17 +455,32 @@ export function AiAssistantPanel({
       try {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error('Please sign in to use Zero Crumbs AI.');
-        const token = await currentUser.getIdToken();
 
-        const resp = await fetch('/api/ai/chat', {
+        const requestBody = JSON.stringify(buildChatRequestBody(trimmed));
+        let token = await currentUser.getIdToken();
+        let resp = await fetch('/api/ai/chat', {
           method: 'POST',
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(buildChatRequestBody(trimmed)),
+          body: requestBody,
         });
+
+        if (resp.status === 401) {
+          logVoiceDiagnostic('chat_token_refresh_retry', { status: 401 }, 'warn');
+          token = await currentUser.getIdToken(true);
+          resp = await fetch('/api/ai/chat', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: requestBody,
+          });
+        }
 
         let data: {
           reply?: string;
@@ -454,17 +495,26 @@ export function AiAssistantPanel({
         }
 
         if (!resp.ok) {
+          logVoiceDiagnostic(
+            'chat_http_error',
+            { status: resp.status, missingApiKey: data.missingApiKey, error: data.error },
+            'error'
+          );
           if (data.missingApiKey) {
             setMissingApiKey(true);
           }
           const friendly =
             data.error && !data.error.trim().startsWith('{')
               ? data.error
-              : resp.status === 503
-                ? 'Zero Crumbs AI is temporarily experiencing high demand. Please tap Retry in a moment.'
-                : resp.status === 429
-                  ? 'Zero Crumbs AI reached a temporary rate limit. Please wait a moment and tap Retry.'
-                  : 'Zero Crumbs AI could not complete your request right now. Please tap Retry.';
+              : resp.status === 401
+                ? 'Your sign-in session expired. Please refresh or sign in again.'
+                : resp.status === 403
+                  ? 'Please verify your email address via Email OTP before using Zero Crumbs AI.'
+                  : resp.status === 503
+                    ? 'Zero Crumbs AI is temporarily experiencing high demand. Please tap Retry in a moment.'
+                    : resp.status === 429
+                      ? 'Zero Crumbs AI reached a temporary rate limit. Please wait a moment and tap Retry.'
+                      : 'Zero Crumbs AI could not complete your request right now. Please tap Retry.';
           throw new Error(friendly);
         }
 
@@ -494,9 +544,21 @@ export function AiAssistantPanel({
           voiceActiveRef.current &&
           voiceSessionId === voiceSessionIdRef.current
         ) {
+          logVoiceDiagnostic('chat_reply_speaking', {
+            replyLength: replyText.length,
+            pendingActions: assistantMsg.pendingActions?.length || 0,
+          });
           speakAssistantReply(assistantMsgId, replyText, true, voiceSessionId);
         }
       } catch (err) {
+        logVoiceDiagnostic(
+          'chat_exception',
+          {
+            speakReply: Boolean(options?.speakReply),
+            message: err instanceof Error ? err.message : String(err),
+          },
+          'error'
+        );
         setLastFailedPrompt(trimmed);
         let friendly = 'Zero Crumbs AI is temporarily unavailable. Please tap Retry to try again.';
         if (err instanceof DOMException && err.name === 'AbortError') {
@@ -526,12 +588,12 @@ export function AiAssistantPanel({
         if (activeControllerRef.current === controller) {
           activeControllerRef.current = null;
         }
+        loadingRef.current = false;
         setLoading(false);
       }
     },
     [
       buildChatRequestBody,
-      loading,
       setMessages,
       speakAssistantReply,
       stopVoiceConversation,
@@ -557,22 +619,36 @@ export function AiAssistantPanel({
       try {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error('Please sign in to use Zero Crumbs AI Voice.');
-        const token = await currentUser.getIdToken();
+        let token = await currentUser.getIdToken();
         const audioBase64 = await blobToBase64(audioBlob);
 
         if (!voiceActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
 
-        const resp = await fetch('/api/ai/transcribe', {
+        const payload = JSON.stringify({
+          audioBase64,
+          mimeType: audioBlob.type || 'audio/webm',
+        });
+
+        let resp = await fetch('/api/ai/transcribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            audioBase64,
-            mimeType: audioBlob.type || 'audio/webm',
-          }),
+          body: payload,
         });
+
+        if (resp.status === 401) {
+          token = await currentUser.getIdToken(true);
+          resp = await fetch('/api/ai/transcribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: payload,
+          });
+        }
 
         if (!voiceActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
 
@@ -584,6 +660,11 @@ export function AiAssistantPanel({
         }
 
         if (!resp.ok) {
+          logVoiceDiagnostic(
+            'transcribe_http_error',
+            { status: resp.status, missingApiKey: data.missingApiKey, error: data.error },
+            'error'
+          );
           if (data.missingApiKey) {
             setMissingApiKey(true);
           }
@@ -591,6 +672,7 @@ export function AiAssistantPanel({
         }
 
         const transcript = (data.transcript || '').trim();
+        logVoiceDiagnostic('transcribe_success', { transcriptLength: transcript.length });
         if (!transcript) {
           setVoiceHint('No speech was detected in that clip. Listening again...');
           if (voiceActiveRef.current && voiceSessionIdRef.current === sessionId) {
@@ -602,6 +684,11 @@ export function AiAssistantPanel({
         await sendMessage(transcript, { speakReply: true });
       } catch (err) {
         if (!voiceActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
+        logVoiceDiagnostic(
+          'transcribe_exception',
+          { message: err instanceof Error ? err.message : String(err) },
+          'error'
+        );
         const msg =
           err instanceof Error && err.message
             ? err.message
@@ -712,13 +799,14 @@ export function AiAssistantPanel({
     setRecognitionMode('browser-speech');
     stopBrowserRecognition();
     finalSpeechTranscriptRef.current = '';
+    latestTranscriptRef.current = '';
     setInterimTranscript('');
     setSpeechDetected(false);
 
     const sessionId = voiceSessionIdRef.current;
 
-    // On mobile browsers (or after an audio-capture conflict), keeping getUserMedia open alongside
-    // SpeechRecognition can conflict; release stream after permission check in those cases.
+    // On mobile browsers (or after an audio-capture/no-speech hardware conflict), keeping getUserMedia
+    // open alongside SpeechRecognition can conflict; release stream after permission check in those cases.
     const isMobile = isMobileOrTouchBrowser();
     if (isMobile || retriedWithoutStreamRef.current) {
       releaseMicrophoneHardware();
@@ -740,6 +828,9 @@ export function AiAssistantPanel({
 
     recognition.onaudiostart = () => {
       if (!voiceActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
+      logVoiceDiagnostic('speech_recognition_audio_start', {
+        releasedStream: isMobile || retriedWithoutStreamRef.current,
+      });
       updateVoiceStage('listening');
       if (noSpeechCountRef.current === 0) {
         setVoiceHint('Listening — speak naturally');
@@ -775,13 +866,16 @@ export function AiAssistantPanel({
         finalSpeechTranscriptRef.current = `${finalSpeechTranscriptRef.current} ${finalChunk}`.trim();
       }
       const combinedPreview = `${finalSpeechTranscriptRef.current} ${interimChunk}`.trim();
+      latestTranscriptRef.current = combinedPreview;
       setInterimTranscript(combinedPreview);
 
       if (finalChunk && finalSpeechTranscriptRef.current) {
         handledResult = true;
         const spokenText = finalSpeechTranscriptRef.current;
         finalSpeechTranscriptRef.current = '';
+        latestTranscriptRef.current = '';
         setInterimTranscript('');
+        logVoiceDiagnostic('speech_recognition_final', { textLength: spokenText.length });
         try {
           recognition.stop();
         } catch {
@@ -799,6 +893,12 @@ export function AiAssistantPanel({
         return;
       }
 
+      logVoiceDiagnostic('speech_recognition_error', {
+        error: errCode,
+        message: event.message,
+        hasOpenStream: Boolean(micStreamRef.current),
+      }, errCode === 'no-speech' ? 'info' : 'warn');
+
       if (errCode === 'not-allowed' || errCode === 'permission-denied') {
         const info = formatMicrophonePermissionError(
           new DOMException('Microphone permission denied', 'NotAllowedError')
@@ -811,7 +911,12 @@ export function AiAssistantPanel({
         return;
       }
 
-      if (errCode === 'audio-capture' && micStreamRef.current && !retriedWithoutStreamRef.current) {
+      if (
+        (errCode === 'audio-capture' || errCode === 'no-speech') &&
+        micStreamRef.current &&
+        !retriedWithoutStreamRef.current
+      ) {
+        // Release dual getUserMedia stream so SpeechRecognition gets exclusive mic access
         switchingToFallback = true;
         retriedWithoutStreamRef.current = true;
         stopBrowserRecognition();
@@ -831,6 +936,7 @@ export function AiAssistantPanel({
         errCode === 'audio-capture'
       ) {
         // Seamlessly fall back to MediaRecorder + Gemini /api/ai/transcribe
+        logVoiceDiagnostic('switching_to_server_transcribe_fallback', { reason: errCode }, 'warn');
         switchingToFallback = true;
         stopBrowserRecognition();
         if (typeof MediaRecorder !== 'undefined') {
@@ -862,7 +968,7 @@ export function AiAssistantPanel({
         return;
       }
 
-      setErrorMsg('Voice recognition encountered an issue. Please tap Retry Voice.');
+      setErrorMsg(`Voice recognition encountered an issue (${errCode || 'unknown'}). Please tap Retry Voice.`);
       setErrorHint('');
       setVoiceRetryAvailable(true);
       stopVoiceConversation({ preserveError: true });
@@ -879,10 +985,13 @@ export function AiAssistantPanel({
         return;
       }
 
-      const buffered = finalSpeechTranscriptRef.current.trim();
+      // On Android Chrome, SpeechRecognition can emit interimResults and fire onend before isFinal=true
+      const buffered = (finalSpeechTranscriptRef.current || latestTranscriptRef.current).trim();
       if (buffered) {
         finalSpeechTranscriptRef.current = '';
+        latestTranscriptRef.current = '';
         setInterimTranscript('');
+        logVoiceDiagnostic('speech_recognition_onend_flush', { textLength: buffered.length });
         void sendMessage(buffered, { speakReply: true });
         return;
       }
@@ -907,7 +1016,12 @@ export function AiAssistantPanel({
         setVoiceHint('Listening — speak naturally');
       }
       recognition.start();
-    } catch {
+    } catch (err) {
+      logVoiceDiagnostic(
+        'speech_recognition_start_exception',
+        { message: err instanceof Error ? err.message : String(err) },
+        'warn'
+      );
       switchingToFallback = true;
       stopBrowserRecognition();
       if (typeof MediaRecorder !== 'undefined') {
@@ -946,12 +1060,22 @@ export function AiAssistantPanel({
     setLastFailedPrompt(null);
     setVoiceRetryAvailable(false);
     setInterimTranscript('');
+    latestTranscriptRef.current = '';
     noSpeechCountRef.current = 0;
 
     // Unlock browser TTS inside synchronous user gesture (critical for iOS Safari / Android Chrome)
     unlockSpeechSynthesis();
 
+    const envDiag = getVoiceEnvironmentDiagnostics();
     const support = getVoiceSupportInfo();
+    const permCheck = await queryMicrophonePermissionStatus();
+    logVoiceDiagnostic('start_voice_requested', {
+      ...envDiag,
+      permissionStatus: permCheck.status,
+      permissionSource: permCheck.source,
+      preferredMode: support.preferredMode,
+    });
+
     if (!support.supported) {
       setErrorMsg(support.unsupportedReason || 'Voice assistant is not supported in this browser.');
       setErrorHint(
@@ -995,6 +1119,14 @@ export function AiAssistantPanel({
       if (!voiceActiveRef.current || voiceSessionIdRef.current !== sessionId) {
         return;
       }
+      logVoiceDiagnostic(
+        'microphone_request_failed',
+        {
+          name: err instanceof DOMException ? err.name : 'Error',
+          message: err instanceof Error ? err.message : String(err),
+        },
+        'error'
+      );
       const info = formatMicrophonePermissionError(err);
       setErrorMsg(info.message);
       setErrorHint(info.howToEnable);
@@ -1104,14 +1236,14 @@ export function AiAssistantPanel({
 
   const content = (
     <div
-      className={`flex flex-col bg-white border border-[#E5E7E2] ${
+      className={`flex flex-col bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] ${
         mode === 'drawer'
           ? 'w-full sm:w-[440px] h-[580px] max-h-[82dvh] rounded-2xl shadow-2xl overflow-hidden'
           : 'h-[calc(100dvh-13rem)] min-h-[480px] rounded-2xl overflow-hidden'
       }`}
     >
       {/* Header */}
-      <div className="px-4 sm:px-5 py-3.5 bg-[#1B3B2B] text-white flex items-center justify-between gap-2 shrink-0">
+      <div className="px-4 sm:px-5 py-3.5 bg-[#1B3B2B] dark:bg-[#12291E] text-white flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-[#DCEAD8]" />
@@ -1173,24 +1305,25 @@ export function AiAssistantPanel({
       </div>
 
       {/* Chat Body */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-[#FAF9F6]">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-[#FAF9F6] dark:bg-[#0F1713]">
         {messages.length === 0 && !interimTranscript && (
           <div className="space-y-4">
-            <div className="bg-white border border-[#E5E7E2] rounded-2xl p-4 text-sm text-[#34443A] leading-relaxed">
+            <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-4 text-sm text-[#34443A] dark:text-[#D5E2DA] leading-relaxed">
               Hello {profile?.fullName?.split(' ')[0] || 'there'}! I am{' '}
-              <strong>Zero Crumbs AI</strong>. Type a question or tap <strong>Start Voice</strong>{' '}
-              to speak with me about your pantry, expiring items, recipes, or surplus donations.
-              Every inventory or donation change asks for your confirmation first.
+              <strong className="dark:text-white">Zero Crumbs AI</strong>. Type a question or tap{' '}
+              <strong className="dark:text-white">Start Voice</strong> to speak with me about your
+              pantry, expiring items, recipes, or surplus donations. Every inventory or donation
+              change asks for your confirmation first.
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#5A6A60]">Try asking:</p>
+              <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4]">Try asking:</p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTED_PROMPTS.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
                     onClick={() => void sendMessage(prompt)}
-                    className="text-left px-3 py-2 rounded-xl bg-white border border-[#DCE0D8] text-xs text-[#1A2820] hover:bg-[#F2F4EF] transition-colors cursor-pointer"
+                    className="text-left px-3 py-2 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-xs text-[#1A2820] dark:text-[#E2ECE6] hover:bg-[#F2F4EF] dark:hover:bg-[#1F2D25] transition-colors cursor-pointer"
                   >
                     {prompt}
                   </button>
@@ -1208,8 +1341,8 @@ export function AiAssistantPanel({
             <div
               className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user'
-                  ? 'bg-[#1B4332] text-white'
-                  : 'bg-white border border-[#E5E7E2] text-[#1A2820]'
+                  ? 'bg-[#1B4332] dark:bg-[#2D6A4F] text-white'
+                  : 'bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] text-[#1A2820] dark:text-[#EBF2ED]'
               }`}
             >
               {msg.text}
@@ -1223,27 +1356,31 @@ export function AiAssistantPanel({
                   return (
                     <div
                       key={act.actionId}
-                      className="bg-white border border-[#D4DDD3] rounded-2xl p-4 shadow-xs"
+                      className="bg-white dark:bg-[#17211C] border border-[#D4DDD3] dark:border-[#2C3F34] rounded-2xl p-4 shadow-xs"
                     >
-                      <p className="text-xs font-medium text-[#52796F] mb-1">
+                      <p className="text-xs font-medium text-[#52796F] dark:text-[#86B69C] mb-1">
                         Proposed Account Action
                       </p>
-                      <p className="text-sm font-semibold text-[#1A2820] mb-1">{act.title}</p>
-                      <p className="text-xs text-[#4F5E55] mb-3">{act.description}</p>
+                      <p className="text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-1">
+                        {act.title}
+                      </p>
+                      <p className="text-xs text-[#4F5E55] dark:text-[#A3B5AA] mb-3">
+                        {act.description}
+                      </p>
 
                       {state === 'pending' && (
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => void handleConfirmAction(msg, act)}
-                            className="px-3.5 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors cursor-pointer"
+                            className="px-3.5 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer"
                           >
                             Confirm & Execute
                           </button>
                           <button
                             type="button"
                             onClick={() => void handleCancelAction(msg, act)}
-                            className="px-3.5 py-2 rounded-xl border border-[#DCE0D8] text-xs font-medium text-[#4F5E55] hover:bg-[#F4F5F2] transition-colors cursor-pointer"
+                            className="px-3.5 py-2 rounded-xl border border-[#DCE0D8] dark:border-[#31483B] text-xs font-medium text-[#4F5E55] dark:text-[#C4D3CA] hover:bg-[#F4F5F2] dark:hover:bg-[#213028] transition-colors cursor-pointer"
                           >
                             Cancel
                           </button>
@@ -1251,28 +1388,30 @@ export function AiAssistantPanel({
                       )}
 
                       {state === 'executing' && (
-                        <p className="text-xs text-[#355E4B] inline-flex items-center gap-1.5">
+                        <p className="text-xs text-[#355E4B] dark:text-[#86B69C] inline-flex items-center gap-1.5">
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           Saving to your Zero Crumbs database...
                         </p>
                       )}
 
                       {state === 'confirmed' && (
-                        <p className="text-xs font-medium text-[#1B4332] inline-flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-[#1B4332] dark:text-[#8CD4A9] inline-flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 shrink-0" />
                           {act.executionMessage || 'Action completed and recorded.'}
                         </p>
                       )}
 
                       {state === 'failed' && (
-                        <p className="text-xs font-medium text-[#B83B3B] inline-flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-[#B83B3B] dark:text-[#F29A9A] inline-flex items-center gap-1.5">
                           <XCircle className="w-4 h-4 shrink-0" />
                           {act.executionMessage || 'Action failed.'}
                         </p>
                       )}
 
                       {state === 'cancelled' && (
-                        <p className="text-xs text-[#6B7A70]">Cancelled — no changes made.</p>
+                        <p className="text-xs text-[#6B7A70] dark:text-[#9CB0A4]">
+                          Cancelled — no changes made.
+                        </p>
                       )}
                     </div>
                   );
@@ -1281,7 +1420,7 @@ export function AiAssistantPanel({
             )}
 
             <div className="mt-1 flex items-center gap-2 px-1">
-              <span className="text-[10px] text-[#6B7A70]">{msg.timestamp}</span>
+              <span className="text-[10px] text-[#6B7A70] dark:text-[#90A498]">{msg.timestamp}</span>
               {msg.role === 'assistant' && hasSpeechSynthesisSupport() && (
                 <button
                   type="button"
@@ -1292,7 +1431,7 @@ export function AiAssistantPanel({
                       speakAssistantReply(msg.id, msg.text, false);
                     }
                   }}
-                  className="text-[10px] text-[#52796F] hover:text-[#1B4332] inline-flex items-center gap-1 cursor-pointer"
+                  className="text-[10px] text-[#52796F] dark:text-[#86B69C] hover:text-[#1B4332] dark:hover:text-[#CBE5D5] inline-flex items-center gap-1 cursor-pointer"
                   aria-label={speakingMessageId === msg.id ? 'Stop reading aloud' : 'Read reply aloud'}
                 >
                   {speakingMessageId === msg.id ? (
@@ -1315,29 +1454,31 @@ export function AiAssistantPanel({
         {/* Live speech recognition preview while user is speaking */}
         {interimTranscript && (
           <div className="flex flex-col items-end">
-            <div className="max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-[#1B4332]/85 text-white border border-[#1B4332]">
+            <div className="max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-[#1B4332]/85 dark:bg-[#2D6A4F]/90 text-white border border-[#1B4332] dark:border-[#3D8B67]">
               {interimTranscript}
             </div>
-            <span className="mt-1 text-[10px] text-[#52796F] px-1">Listening...</span>
+            <span className="mt-1 text-[10px] text-[#52796F] dark:text-[#86B69C] px-1">
+              Listening...
+            </span>
           </div>
         )}
 
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-[#5A6A60] bg-white border border-[#E5E7E2] rounded-xl px-3.5 py-2.5 w-fit">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1B4332]" />
+          <div className="flex items-center gap-2 text-xs text-[#5A6A60] dark:text-[#B5C6BC] bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-xl px-3.5 py-2.5 w-fit">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1B4332] dark:text-[#86B69C]" />
             Zero Crumbs AI is checking your inventory...
           </div>
         )}
 
         {missingApiKey && !errorMsg && (
-          <div className="p-3.5 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F] space-y-1.5">
+          <div className="p-3.5 rounded-xl bg-[#FDF2EC] dark:bg-[#2B1B18] border border-[#EBC6BA] dark:border-[#5C3128] text-xs text-[#9E2F2F] dark:text-[#F5B0A6] space-y-1.5">
             <div className="flex items-start gap-2 font-medium">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>Gemini API key setup needed on the server</span>
             </div>
-            <p className="leading-relaxed text-[#7E2B2B]">
+            <p className="leading-relaxed text-[#7E2B2B] dark:text-[#E89B90]">
               Create a free Gemini API key in Google AI Studio, then add it as{' '}
-              <code className="px-1 py-0.5 rounded bg-white/80 font-mono text-[11px]">
+              <code className="px-1 py-0.5 rounded bg-white/80 dark:bg-black/30 font-mono text-[11px]">
                 GEMINI_API_KEY
               </code>{' '}
               in your project&apos;s <strong>Settings &gt; Secrets</strong> panel.
@@ -1346,21 +1487,21 @@ export function AiAssistantPanel({
         )}
 
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F] space-y-2.5">
+          <div className="p-3.5 rounded-xl bg-[#FDF2EC] dark:bg-[#2B1B18] border border-[#EBC6BA] dark:border-[#5C3128] text-xs text-[#9E2F2F] dark:text-[#F5B0A6] space-y-2.5">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-medium leading-relaxed">{errorMsg}</p>
                 {errorHint && (
-                  <p className="leading-relaxed text-[#7E2B2B]">{errorHint}</p>
+                  <p className="leading-relaxed text-[#7E2B2B] dark:text-[#E89B90]">{errorHint}</p>
                 )}
               </div>
             </div>
             {missingApiKey && (
-              <p className="leading-relaxed text-[#7E2B2B]">
+              <p className="leading-relaxed text-[#7E2B2B] dark:text-[#E89B90]">
                 To configure it: generate a key in Google AI Studio, open{' '}
                 <strong>Settings &gt; Secrets</strong>, save it as{' '}
-                <code className="px-1 py-0.5 rounded bg-white/80 font-mono text-[11px]">
+                <code className="px-1 py-0.5 rounded bg-white/80 dark:bg-black/30 font-mono text-[11px]">
                   GEMINI_API_KEY
                 </code>
                 , and tap Retry below.
@@ -1372,7 +1513,7 @@ export function AiAssistantPanel({
                   type="button"
                   disabled={loading}
                   onClick={() => void sendMessage(lastFailedPrompt, { skipUserBubble: true })}
-                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-white border border-[#EBC6BA] text-[#9E2F2F] font-medium hover:bg-[#FAF0EB] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-white dark:bg-[#1E2A23] border border-[#EBC6BA] dark:border-[#6A392F] text-[#9E2F2F] dark:text-[#F5B0A6] font-medium hover:bg-[#FAF0EB] dark:hover:bg-[#34211D] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Retry Message
@@ -1382,10 +1523,19 @@ export function AiAssistantPanel({
                 <button
                   type="button"
                   onClick={() => void startVoiceConversation()}
-                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-white border border-[#EBC6BA] text-[#9E2F2F] font-medium hover:bg-[#FAF0EB] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-white dark:bg-[#1E2A23] border border-[#EBC6BA] dark:border-[#6A392F] text-[#9E2F2F] dark:text-[#F5B0A6] font-medium hover:bg-[#FAF0EB] dark:hover:bg-[#34211D] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Mic className="w-3.5 h-3.5" />
                   Retry Voice
+                </button>
+              )}
+              {voiceRetryAvailable && onOpenVoiceSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenVoiceSettings}
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-white dark:bg-[#1E2A23] border border-[#DCE0D8] dark:border-[#31483B] text-[#1A2820] dark:text-[#EBF2ED] font-medium hover:bg-[#F4F5F2] dark:hover:bg-[#26362E] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  Open Microphone Settings
                 </button>
               )}
             </div>
@@ -1397,14 +1547,14 @@ export function AiAssistantPanel({
 
       {/* Voice Assistant Status Strip */}
       {isVoiceRunning && (
-        <div className="px-4 py-2.5 bg-[#EEF3EC] border-t border-[#D4DDD3] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+        <div className="px-4 py-2.5 bg-[#EEF3EC] dark:bg-[#1A2921] border-t border-[#D4DDD3] dark:border-[#2B4034] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             {voiceStage === 'requesting_permission' ||
             voiceStage === 'transcribing' ||
             voiceStage === 'processing' ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[#1B4332] shrink-0" />
+              <Loader2 className="w-4 h-4 animate-spin text-[#1B4332] dark:text-[#8CD4A9] shrink-0" />
             ) : voiceStage === 'speaking' ? (
-              <Volume2 className="w-4 h-4 text-[#1B4332] shrink-0 animate-pulse" />
+              <Volume2 className="w-4 h-4 text-[#1B4332] dark:text-[#8CD4A9] shrink-0 animate-pulse" />
             ) : (
               <div className="flex items-end gap-0.5 h-4 shrink-0" aria-hidden="true">
                 {barHeights.map((weight, idx) => {
@@ -1417,7 +1567,7 @@ export function AiAssistantPanel({
                   return (
                     <span
                       key={idx}
-                      className="w-1 rounded-full bg-[#1B4332] transition-all duration-75"
+                      className="w-1 rounded-full bg-[#1B4332] dark:bg-[#8CD4A9] transition-all duration-75"
                       style={{ height: `${Math.round(activeLevel * 16)}px` }}
                     />
                   );
@@ -1425,7 +1575,7 @@ export function AiAssistantPanel({
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-[#1B4332] truncate">
+              <p className="text-xs font-semibold text-[#1B4332] dark:text-[#B7DFC5] truncate">
                 {voiceStage === 'requesting_permission'
                   ? 'Requesting microphone access...'
                   : voiceStage === 'transcribing'
@@ -1440,7 +1590,7 @@ export function AiAssistantPanel({
                             ? 'Hearing your voice...'
                             : 'Listening — speak now'}
               </p>
-              <p className="text-[11px] text-[#4F5E55] truncate">
+              <p className="text-[11px] text-[#4F5E55] dark:text-[#9CB0A4] truncate">
                 {voiceHint || 'Speak naturally to ask questions or manage inventory'}
               </p>
             </div>
@@ -1451,7 +1601,7 @@ export function AiAssistantPanel({
               <button
                 type="button"
                 onClick={handleSendRecordingNow}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Send Speech</span>
@@ -1462,7 +1612,7 @@ export function AiAssistantPanel({
               <button
                 type="button"
                 onClick={handleStopSpeakingOnly}
-                className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-white border border-[#DCE0D8] text-[#1A2820] text-xs font-medium hover:bg-[#F4F5F2] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#1E2A23] border border-[#DCE0D8] dark:border-[#31483B] text-[#1A2820] dark:text-[#EBF2ED] text-xs font-medium hover:bg-[#F4F5F2] dark:hover:bg-[#26362E] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <VolumeX className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Stop Speaking</span>
@@ -1474,8 +1624,8 @@ export function AiAssistantPanel({
               onClick={toggleVoiceOutputMute}
               className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 border transition-colors cursor-pointer ${
                 voiceMutedOutput
-                  ? 'bg-[#FDF2EC] border-[#EBC6BA] text-[#9E2F2F]'
-                  : 'bg-white border-[#DCE0D8] text-[#1A2820] hover:bg-[#F4F5F2]'
+                  ? 'bg-[#FDF2EC] dark:bg-[#2B1B18] border-[#EBC6BA] dark:border-[#5C3128] text-[#9E2F2F] dark:text-[#F5B0A6]'
+                  : 'bg-white dark:bg-[#1E2A23] border-[#DCE0D8] dark:border-[#31483B] text-[#1A2820] dark:text-[#EBF2ED] hover:bg-[#F4F5F2] dark:hover:bg-[#26362E]'
               }`}
               aria-label={voiceMutedOutput ? 'Unmute AI voice output' : 'Mute AI voice output'}
               title={voiceMutedOutput ? 'Unmute AI voice output' : 'Mute AI voice output'}
@@ -1507,14 +1657,14 @@ export function AiAssistantPanel({
           e.preventDefault();
           void sendMessage(input);
         }}
-        className="p-3 bg-white border-t border-[#E5E7E2] flex items-center gap-2 shrink-0"
+        className="p-3 bg-white dark:bg-[#17211C] border-t border-[#E5E7E2] dark:border-[#27362E] flex items-center gap-2 shrink-0"
       >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask Zero Crumbs AI or tap Start Voice..."
-          className="flex-1 min-w-0 min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+          className="flex-1 min-w-0 min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
         />
         <button
           type="button"
@@ -1528,7 +1678,7 @@ export function AiAssistantPanel({
           className={`min-w-[44px] min-h-[44px] p-2.5 rounded-xl border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
             isVoiceRunning
               ? 'bg-[#FDF2EC] border-[#EBC6BA] text-[#C2410C] hover:bg-[#FAF0EB]'
-              : 'bg-[#EEF3EC] border-[#D4DDD3] text-[#1B4332] hover:bg-[#E1EBDF]'
+              : 'bg-[#EEF3EC] dark:bg-[#22332A] border-[#D4DDD3] dark:border-[#31483B] text-[#1B4332] dark:text-[#B7DFC5] hover:bg-[#E1EBDF] dark:hover:bg-[#294034]'
           }`}
           aria-label={isVoiceRunning ? 'Stop voice assistant' : 'Start voice assistant'}
           title={isVoiceRunning ? 'Stop voice assistant' : 'Talk with Zero Crumbs AI'}
@@ -1538,7 +1688,7 @@ export function AiAssistantPanel({
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="min-w-[44px] min-h-[44px] p-2.5 rounded-xl bg-[#1B4332] text-white hover:bg-[#143325] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
+          className="min-w-[44px] min-h-[44px] p-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
           aria-label="Send message"
         >
           <Send className="w-4 h-4" />
@@ -1548,6 +1698,7 @@ export function AiAssistantPanel({
   );
 
   if (mode === 'drawer') {
+    if (!open) return null;
     return (
       <div className="fixed inset-x-3 bottom-3 sm:inset-auto sm:bottom-5 sm:right-5 z-50 sm:w-auto">
         {content}

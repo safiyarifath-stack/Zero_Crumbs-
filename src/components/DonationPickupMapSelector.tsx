@@ -198,7 +198,7 @@ function AddressAutocompleteInput({
     <div className="relative flex-1">
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#6B7A70] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-[#6B7A70] dark:text-[#90A498] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
@@ -215,7 +215,7 @@ function AddressAutocompleteInput({
               }
             }}
             placeholder="Search street, neighborhood, landmark, or postal code"
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] disabled:bg-[#F5F6F2] disabled:text-[#6B7A70]"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] disabled:bg-[#F5F6F2] dark:disabled:bg-[#17211C] disabled:text-[#6B7A70] dark:disabled:text-[#869B8F]"
           />
         </div>
         <button
@@ -225,7 +225,7 @@ function AddressAutocompleteInput({
             setDropdownOpen(false);
             onSubmitSearch();
           }}
-          className="px-3.5 py-2.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap inline-flex items-center gap-1.5"
+          className="px-3.5 py-2.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] text-xs font-medium hover:bg-[#DFEBDD] dark:hover:bg-[#244234] transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap inline-flex items-center gap-1.5"
         >
           {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
           Find
@@ -233,9 +233,9 @@ function AddressAutocompleteInput({
       </div>
 
       {dropdownOpen && !disabled && (suggestions.length > 0 || loadingSuggestions) && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white border border-[#DCE0D8] rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
           {loadingSuggestions && suggestions.length === 0 ? (
-            <div className="px-3.5 py-2.5 text-xs text-[#5A6A60] flex items-center gap-2">
+            <div className="px-3.5 py-2.5 text-xs text-[#5A6A60] dark:text-[#9CB0A4] flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               Searching addresses...
             </div>
@@ -248,9 +248,9 @@ function AddressAutocompleteInput({
                   key={`${s.placePrediction?.placeId || idx}`}
                   type="button"
                   onClick={() => void handleSelectSuggestion(s)}
-                  className="w-full text-left px-3.5 py-2.5 text-xs text-[#1A2820] hover:bg-[#EEF3EC] border-b last:border-b-0 border-[#ECEEE8] flex items-start gap-2 cursor-pointer"
+                  className="w-full text-left px-3.5 py-2.5 text-xs text-[#1A2820] dark:text-[#EBF2ED] hover:bg-[#EEF3EC] dark:hover:bg-[#1F2D25] border-b last:border-b-0 border-[#ECEEE8] dark:border-[#24322B] flex items-start gap-2 cursor-pointer"
                 >
-                  <MapPin className="w-3.5 h-3.5 text-[#1B4332] mt-0.5 shrink-0" />
+                  <MapPin className="w-3.5 h-3.5 text-[#1B4332] dark:text-[#82C9A5] mt-0.5 shrink-0" />
                   <span>{label}</span>
                 </button>
               );
@@ -673,8 +673,8 @@ export function DonationPickupMapSelector({
 
   if (!configLoaded) {
     return (
-      <div className="p-4 rounded-xl border border-[#DCE0D8] bg-[#FAF9F6] flex items-center gap-2.5 text-xs text-[#5A6A60]">
-        <Loader2 className="w-4 h-4 animate-spin text-[#1B4332]" />
+      <div className="p-4 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center gap-2.5 text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
+        <Loader2 className="w-4 h-4 animate-spin text-[#1B4332] dark:text-[#82C9A5]" />
         Loading interactive Google Maps pickup selector...
       </div>
     );
@@ -682,7 +682,7 @@ export function DonationPickupMapSelector({
 
   if (!apiKey) {
     return (
-      <div className="p-4 rounded-xl border border-[#EBC6BA] bg-[#FDF2EC] text-xs text-[#9E2F2F] space-y-1.5">
+      <div className="p-4 rounded-xl border border-[#EBC6BA] dark:border-[#6B3232] bg-[#FDF2EC] dark:bg-[#331B1B] text-xs text-[#9E2F2F] dark:text-[#FCA5A5] space-y-1.5">
         <p className="font-semibold">Google Maps API Key Not Available</p>
         <p>
           To select an exact pickup pin and search genuine nearby charities via Google Places,
@@ -702,10 +702,10 @@ export function DonationPickupMapSelector({
         <div className="space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold text-[#1A2820]">
+              <p className="text-xs font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                 Exact Pickup Location (Google Maps) *
               </p>
-              <p className="text-[11px] text-[#5A6A60]">
+              <p className="text-[11px] text-[#5A6A60] dark:text-[#9CB0A4]">
                 Search an address, use your current GPS location, or click/drag the map pin.
               </p>
             </div>
@@ -713,7 +713,7 @@ export function DonationPickupMapSelector({
               type="button"
               disabled={isConfirmed || locating || geocoding}
               onClick={handleUseCurrentLocation}
-              className="px-3 py-2 rounded-xl border border-[#C7DBC9] bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              className="px-3 py-2 rounded-xl border border-[#C7DBC9] dark:border-[#2E4D3E] bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] text-xs font-medium hover:bg-[#DFEBDD] dark:hover:bg-[#244234] transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               {locating ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -748,7 +748,7 @@ export function DonationPickupMapSelector({
           {mapError && (
             <div
               role="alert"
-              className="p-3 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-xs text-[#9E2F2F] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+              className="p-3 rounded-xl bg-[#FDF2EC] dark:bg-[#331B1B] border border-[#EBC6BA] dark:border-[#6B3232] text-xs text-[#9E2F2F] dark:text-[#FCA5A5] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
             >
               <span>{mapError}</span>
               {embeddedGeoBlocked && typeof window !== 'undefined' && (
@@ -756,7 +756,7 @@ export function DonationPickupMapSelector({
                   href={window.location.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-[#EBC6BA] text-[11px] font-semibold text-[#9E2F2F] hover:bg-[#FAF9F6] shrink-0 self-start sm:self-auto"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#17211C] border border-[#EBC6BA] dark:border-[#6B3232] text-[11px] font-semibold text-[#9E2F2F] dark:text-[#FCA5A5] hover:bg-[#FAF9F6] dark:hover:bg-[#1F2D25] shrink-0 self-start sm:self-auto"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Open in New Tab
@@ -766,7 +766,7 @@ export function DonationPickupMapSelector({
           )}
 
           {/* Interactive Google Map */}
-          <div className="relative w-full h-[300px] sm:h-[340px] rounded-xl overflow-hidden border border-[#DCE0D8]">
+          <div className="relative w-full h-[300px] sm:h-[340px] rounded-xl overflow-hidden border border-[#DCE0D8] dark:border-[#2B3B32]">
             <GoogleMap
               mapId="DEMO_MAP_ID"
               internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
@@ -867,8 +867,8 @@ export function DonationPickupMapSelector({
             </GoogleMap>
 
             {geocoding && (
-              <div className="absolute top-3 left-3 z-20 px-3 py-1.5 rounded-xl bg-white/95 border border-[#DCE0D8] shadow-sm text-xs text-[#1A2820] flex items-center gap-1.5">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1B4332]" />
+              <div className="absolute top-3 left-3 z-20 px-3 py-1.5 rounded-xl bg-white/95 dark:bg-[#17211C]/95 border border-[#DCE0D8] dark:border-[#2B3B32] shadow-sm text-xs text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1B4332] dark:text-[#82C9A5]" />
                 Fetching address...
               </div>
             )}
@@ -878,24 +878,26 @@ export function DonationPickupMapSelector({
           <div
             className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
               isConfirmed
-                ? 'bg-[#EEF3EC] border-[#C7DBC9]'
-                : 'bg-[#FAF9F6] border-[#DCE0D8]'
+                ? 'bg-[#EEF3EC] dark:bg-[#1B3328] border-[#C7DBC9] dark:border-[#2E4D3E]'
+                : 'bg-[#FAF9F6] dark:bg-[#0F1713] border-[#DCE0D8] dark:border-[#2B3B32]'
             }`}
           >
             <div className="space-y-0.5 min-w-0">
               {value ? (
                 <>
-                  <p className="text-xs font-semibold text-[#1A2820] flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#1B4332] shrink-0" />
+                  <p className="text-xs font-semibold text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#1B4332] dark:text-[#82C9A5] shrink-0" />
                     <span>{isConfirmed ? 'Confirmed Pickup Address' : 'Selected Pin Address'}</span>
                   </p>
-                  <p className="text-xs text-[#34443A] break-words">{value.address}</p>
-                  <p className="text-[11px] font-mono text-[#6B7A70] tabular-nums">
+                  <p className="text-xs text-[#34443A] dark:text-[#B8C7BE] break-words">
+                    {value.address}
+                  </p>
+                  <p className="text-[11px] font-mono text-[#6B7A70] dark:text-[#869B8F] tabular-nums">
                     Coordinates: {value.latitude.toFixed(6)}, {value.longitude.toFixed(6)}
                   </p>
                 </>
               ) : (
-                <p className="text-xs text-[#5A6A60]">
+                <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                   Click anywhere on the map or search an address above to drop your pickup pin.
                 </p>
               )}
@@ -907,7 +909,7 @@ export function DonationPickupMapSelector({
                   <button
                     type="button"
                     onClick={handleUnlockLocation}
-                    className="px-3.5 py-2 rounded-xl bg-white border border-[#C7DBC9] text-xs font-medium text-[#1B4332] hover:bg-[#FAF9F6] cursor-pointer whitespace-nowrap"
+                    className="px-3.5 py-2 rounded-xl bg-white dark:bg-[#17211C] border border-[#C7DBC9] dark:border-[#2E4D3E] text-xs font-medium text-[#1B4332] dark:text-[#82C9A5] hover:bg-[#FAF9F6] dark:hover:bg-[#1F2D25] cursor-pointer whitespace-nowrap"
                   >
                     Change Location
                   </button>
@@ -916,7 +918,7 @@ export function DonationPickupMapSelector({
                     type="button"
                     disabled={geocoding || locating}
                     onClick={handleConfirmLocation}
-                    className="px-4 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                    className="px-4 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Confirm Pickup Location
@@ -929,14 +931,14 @@ export function DonationPickupMapSelector({
 
         {/* Step 2: Nearby Genuine Charity Organisations */}
         {isConfirmed && (
-          <div className="space-y-3 pt-2 border-t border-[#ECEEE8]">
+          <div className="space-y-3 pt-2 border-t border-[#ECEEE8] dark:border-[#24322B]">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <h3 className="text-xs font-semibold text-[#1A2820] flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-[#1B4332]" />
+                <h3 className="text-xs font-semibold text-[#1A2820] dark:text-[#EBF2ED] flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-[#1B4332] dark:text-[#82C9A5]" />
                   Nearby Verified Charity Organisations (Google Places)
                 </h3>
-                <p className="text-[11px] text-[#5A6A60]">
+                <p className="text-[11px] text-[#5A6A60] dark:text-[#9CB0A4]">
                   Genuine NGOs, food banks, orphanages, and community kitchens near your pickup pin.
                 </p>
               </div>
@@ -944,7 +946,7 @@ export function DonationPickupMapSelector({
                 type="button"
                 disabled={searchingCharities}
                 onClick={() => value && void fetchNearbyCharities(value.latitude, value.longitude)}
-                className="px-3 py-1.5 rounded-xl border border-[#DCE0D8] bg-white text-xs font-medium text-[#34443A] hover:bg-[#F4F5F2] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+                className="px-3 py-1.5 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] bg-white dark:bg-[#17211C] text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] hover:bg-[#F4F5F2] dark:hover:bg-[#1F2D25] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${searchingCharities ? 'animate-spin' : ''}`} />
                 Refresh Nearby
@@ -952,23 +954,23 @@ export function DonationPickupMapSelector({
             </div>
 
             {searchingCharities ? (
-              <div className="p-5 rounded-xl border border-[#DCE0D8] bg-[#FAF9F6] flex items-center justify-center gap-2 text-xs text-[#5A6A60]">
-                <Loader2 className="w-4 h-4 animate-spin text-[#1B4332]" />
+              <div className="p-5 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center gap-2 text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#1B4332] dark:text-[#82C9A5]" />
                 Searching genuine nearby charity organisations around your pickup pin...
               </div>
             ) : charityError ? (
-              <div className="p-3.5 rounded-xl border border-[#EBC6BA] bg-[#FDF2EC] text-xs text-[#9E2F2F] flex items-center justify-between gap-2">
+              <div className="p-3.5 rounded-xl border border-[#EBC6BA] dark:border-[#6B3232] bg-[#FDF2EC] dark:bg-[#331B1B] text-xs text-[#9E2F2F] dark:text-[#FCA5A5] flex items-center justify-between gap-2">
                 <span>{charityError}</span>
                 <button
                   type="button"
                   onClick={() => value && void fetchNearbyCharities(value.latitude, value.longitude)}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-[#EBC6BA] font-medium cursor-pointer shrink-0"
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#17211C] border border-[#EBC6BA] dark:border-[#6B3232] font-medium cursor-pointer shrink-0"
                 >
                   Retry
                 </button>
               </div>
             ) : hasSearchedCharities && charities.length === 0 ? (
-              <div className="p-4 rounded-xl border border-[#DCE0D8] bg-[#FAF9F6] text-xs text-[#5A6A60]">
+              <div className="p-4 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] bg-[#FAF9F6] dark:bg-[#0F1713] text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                 No nearby charity organisations were returned by Google Places within 15 km of this
                 pin. You can still publish your donation listing or adjust your pickup location.
               </div>
@@ -981,37 +983,41 @@ export function DonationPickupMapSelector({
                       key={org.placeId}
                       className={`p-3.5 rounded-xl border transition-colors ${
                         isSelected
-                          ? 'bg-[#EEF3EC] border-[#1B4332]'
-                          : 'bg-white border-[#E5E7E2] hover:border-[#C7DBC9]'
+                          ? 'bg-[#EEF3EC] dark:bg-[#1B3328] border-[#1B4332] dark:border-[#52B788]'
+                          : 'bg-white dark:bg-[#17211C] border-[#E5E7E2] dark:border-[#27362E] hover:border-[#C7DBC9] dark:hover:border-[#2E4D3E]'
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
                         <div className="space-y-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-[#1A2820]">{org.name}</p>
+                            <p className="text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
+                              {org.name}
+                            </p>
                             {org.category && (
-                              <span className="text-[11px] font-medium text-[#52796F] bg-[#F2F4EF] px-2 py-0.5 rounded-md">
+                              <span className="text-[11px] font-medium text-[#52796F] dark:text-[#82C9A5] bg-[#F2F4EF] dark:bg-[#1F2D25] px-2 py-0.5 rounded-md">
                                 {org.category}
                               </span>
                             )}
                             {typeof org.distanceMeters === 'number' && (
-                              <span className="text-[11px] font-mono font-medium text-[#1B4332] tabular-nums">
+                              <span className="text-[11px] font-mono font-medium text-[#1B4332] dark:text-[#82C9A5] tabular-nums">
                                 {formatDistance(org.distanceMeters)}
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-[#4F5E55]">{org.address}</p>
-                          <p className="text-xs text-[#5A6A60]">
+                          <p className="text-xs text-[#4F5E55] dark:text-[#B8C7BE]">{org.address}</p>
+                          <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                             {org.phone ? (
                               <a
                                 href={`tel:${org.phone.replace(/[^\d+]/g, '')}`}
-                                className="inline-flex items-center gap-1 text-[#1B4332] font-medium hover:underline"
+                                className="inline-flex items-center gap-1 text-[#1B4332] dark:text-[#82C9A5] font-medium hover:underline"
                               >
                                 <Phone className="w-3 h-3" />
                                 {org.phone}
                               </a>
                             ) : (
-                              <span className="text-[#6B7A70]">Phone not listed on Google Maps</span>
+                              <span className="text-[#6B7A70] dark:text-[#869B8F]">
+                                Phone not listed on Google Maps
+                              </span>
                             )}
                           </p>
                         </div>
@@ -1030,8 +1036,8 @@ export function DonationPickupMapSelector({
                             }}
                             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
                               isSelected
-                                ? 'bg-[#1B4332] text-white'
-                                : 'bg-[#EEF3EC] text-[#1B4332] hover:bg-[#DFEBDD]'
+                                ? 'bg-[#1B4332] dark:bg-[#2D6A4F] text-white'
+                                : 'bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] hover:bg-[#DFEBDD] dark:hover:bg-[#244234]'
                             }`}
                           >
                             {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -1044,9 +1050,9 @@ export function DonationPickupMapSelector({
                                 href={org.directionsUri}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-2.5 py-1 rounded-lg border border-[#DCE0D8] bg-white text-[11px] font-medium text-[#1A2820] hover:bg-[#FAF9F6] inline-flex items-center gap-1"
+                                className="px-2.5 py-1 rounded-lg border border-[#DCE0D8] dark:border-[#2B3B32] bg-white dark:bg-[#17211C] text-[11px] font-medium text-[#1A2820] dark:text-[#EBF2ED] hover:bg-[#FAF9F6] dark:hover:bg-[#1F2D25] inline-flex items-center gap-1"
                               >
-                                <Navigation className="w-3 h-3 text-[#1B4332]" />
+                                <Navigation className="w-3 h-3 text-[#1B4332] dark:text-[#82C9A5]" />
                                 Get Directions
                               </a>
                             )}
@@ -1055,7 +1061,7 @@ export function DonationPickupMapSelector({
                                 href={org.googleMapsUri}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-2.5 py-1 rounded-lg border border-[#DCE0D8] bg-white text-[11px] font-medium text-[#5A6A60] hover:text-[#1A2820] inline-flex items-center gap-1"
+                                className="px-2.5 py-1 rounded-lg border border-[#DCE0D8] dark:border-[#2B3B32] bg-white dark:bg-[#17211C] text-[11px] font-medium text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] inline-flex items-center gap-1"
                               >
                                 <ExternalLink className="w-3 h-3" />
                                 Maps

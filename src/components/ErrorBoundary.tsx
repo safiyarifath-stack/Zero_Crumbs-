@@ -28,21 +28,21 @@ export class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white border border-[#E5E7E2] rounded-2xl p-8 text-center">
-            <div className="w-12 h-12 rounded-xl bg-[#FDF2EC] text-[#B84A39] flex items-center justify-center mx-auto mb-4">
+        <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-8 text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#FDF2EC] dark:bg-[#2B1B18] text-[#B84A39] dark:text-[#F5B0A6] flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-semibold text-[#1A2820] mb-2">
+            <h1 className="text-xl font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-2">
               Something went wrong
             </h1>
-            <p className="text-sm text-[#5A6A60] mb-6 leading-relaxed">
+            <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4] mb-6 leading-relaxed">
               {this.state.message}
             </p>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               Reload Zero Crumbs

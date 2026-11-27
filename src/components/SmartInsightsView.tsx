@@ -130,10 +130,10 @@ export function SmartInsightsView({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-[#1A2820]">
+          <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
             Smart Insights & Reports
           </h1>
-          <p className="text-sm text-[#5A6A60]">
+          <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
             Visual analytics across stored food, consumption habits, donations, and expiry trends.
           </p>
         </div>
@@ -141,7 +141,7 @@ export function SmartInsightsView({
         <button
           type="button"
           onClick={onAskAiInsights}
-          className="px-4 py-2.5 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+          className="px-4 py-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
         >
           <Sparkles className="w-4 h-4" />
           Generate AI Shopping & Waste Plan
@@ -150,27 +150,35 @@ export function SmartInsightsView({
 
       {/* Summary KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1">Currently Stored</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1A2820]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1">
+            Currently Stored
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1A2820] dark:text-[#EBF2ED]">
             {activeFoods.length}
           </p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1">Food Consumed</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1B4332]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1">
+            Food Consumed
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1B4332] dark:text-[#82C9A5]">
             {consumedFoods.length}
           </p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1">Food Donated</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#C86D51]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1">
+            Food Donated
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#C86D51] dark:text-[#F2A085]">
             {donatedItemsCount}
           </p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1">Food Wasted</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#B83B3B]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1">
+            Food Wasted
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#B83B3B] dark:text-[#FCA5A5]">
             {wastedFoods.length}
           </p>
         </div>
@@ -178,23 +186,25 @@ export function SmartInsightsView({
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-6">
-          <h2 className="font-display text-base font-semibold text-[#1A2820] mb-1">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6">
+          <h2 className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-1">
             Upcoming Expiry Trends
           </h2>
-          <p className="text-xs text-[#5A6A60] mb-5">
+          <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mb-5">
             Distribution of active food items across upcoming expiry windows.
           </p>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={expiryTrendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEE8" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5A6A60' }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5A6A60' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#9CB0A4" strokeOpacity={0.22} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#869B8F' }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#869B8F' }} />
                 <Tooltip
                   contentStyle={{
                     borderRadius: '12px',
-                    border: '1px solid #E5E7E2',
+                    border: '1px solid #2B3B32',
+                    backgroundColor: '#FFFFFF',
+                    color: '#1A2820',
                     fontSize: '12px',
                   }}
                 />
@@ -204,11 +214,11 @@ export function SmartInsightsView({
           </div>
         </div>
 
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-6">
-          <h2 className="font-display text-base font-semibold text-[#1A2820] mb-1">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6">
+          <h2 className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-1">
             Food Outcome Breakdown
           </h2>
-          <p className="text-xs text-[#5A6A60] mb-5">
+          <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mb-5">
             Stored vs. Consumed vs. Donated vs. Wasted items across your account.
           </p>
           <div className="w-full flex flex-col sm:flex-row sm:items-center gap-4">
@@ -229,21 +239,29 @@ export function SmartInsightsView({
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: '12px',
+                      border: '1px solid #E5E7E2',
+                      backgroundColor: '#FFFFFF',
+                      color: '#1A2820',
+                      fontSize: '12px',
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="w-full sm:w-1/3 space-y-2.5 text-xs">
               {outcomeData.map((d) => (
                 <div key={d.name} className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-[#34443A]">
+                  <span className="flex items-center gap-2 text-[#34443A] dark:text-[#B8C7BE]">
                     <span
                       className="w-2.5 h-2.5 rounded-sm inline-block"
                       style={{ backgroundColor: d.color }}
                     />
                     {d.name}
                   </span>
-                  <span className="font-mono font-semibold tabular-nums text-[#1A2820]">
+                  <span className="font-mono font-semibold tabular-nums text-[#1A2820] dark:text-[#EBF2ED]">
                     {d.value}
                   </span>
                 </div>
@@ -255,52 +273,56 @@ export function SmartInsightsView({
 
       {/* Lists + Recommendations */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <h3 className="font-display text-sm font-semibold text-[#1A2820] mb-3">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <h3 className="font-display text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-3">
             Most-Used Food Items
           </h3>
           {mostUsedItems.length === 0 ? (
-            <p className="text-xs text-[#5A6A60]">
+            <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
               Record consumption via “Use Food” to see your household staples.
             </p>
           ) : (
             <div className="space-y-2.5">
               {mostUsedItems.map(([name, count]) => (
                 <div key={name} className="flex items-center justify-between text-xs">
-                  <span className="text-[#1A2820] font-medium">{name}</span>
-                  <span className="font-mono tabular-nums text-[#5A6A60]">{count} uses</span>
+                  <span className="text-[#1A2820] dark:text-[#EBF2ED] font-medium">{name}</span>
+                  <span className="font-mono tabular-nums text-[#5A6A60] dark:text-[#9CB0A4]">
+                    {count} uses
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <h3 className="font-display text-sm font-semibold text-[#1A2820] mb-3">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <h3 className="font-display text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-3">
             Frequently Wasted Food
           </h3>
           {frequentlyWasted.length === 0 ? (
-            <p className="text-xs text-[#1B4332]">
+            <p className="text-xs text-[#1B4332] dark:text-[#82C9A5]">
               Zero wasted items recorded so far — keep up the great habit!
             </p>
           ) : (
             <div className="space-y-2.5">
               {frequentlyWasted.map(([name, count]) => (
                 <div key={name} className="flex items-center justify-between text-xs">
-                  <span className="text-[#B83B3B] font-medium">{name}</span>
-                  <span className="font-mono tabular-nums text-[#5A6A60]">{count}x wasted</span>
+                  <span className="text-[#B83B3B] dark:text-[#FCA5A5] font-medium">{name}</span>
+                  <span className="font-mono tabular-nums text-[#5A6A60] dark:text-[#9CB0A4]">
+                    {count}x wasted
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <h3 className="font-display text-sm font-semibold text-[#1A2820] mb-3 flex items-center gap-2">
-            <TrendingDown className="w-4 h-4 text-[#1B4332]" />
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <h3 className="font-display text-sm font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-3 flex items-center gap-2">
+            <TrendingDown className="w-4 h-4 text-[#1B4332] dark:text-[#82C9A5]" />
             Waste-Reduction Tips
           </h3>
-          <ul className="space-y-2.5 text-xs text-[#4F5E55] leading-relaxed">
+          <ul className="space-y-2.5 text-xs text-[#4F5E55] dark:text-[#9CB0A4] leading-relaxed">
             {recommendations.map((tip, idx) => (
               <li key={idx}>• {tip}</li>
             ))}

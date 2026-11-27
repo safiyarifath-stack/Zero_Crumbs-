@@ -44,6 +44,11 @@ import type {
   UserProfile,
 } from './types';
 import { getExpiryBucket } from './utils/foodUtils';
+import {
+  applyThemePreference,
+  getSavedThemePreference,
+  subscribeSystemThemeChanges,
+} from './utils/theme';
 import { ActivityHistoryView } from './components/ActivityHistoryView';
 import { AiAssistantPanel } from './components/AiAssistantPanel';
 import {
@@ -72,7 +77,7 @@ const NAV_ITEMS: Array<{ id: NavPage; label: string; shortLabel: string; icon: t
   { id: 'ai', label: 'AI Assistant', shortLabel: 'AI Assistant', icon: Sparkles },
   { id: 'activity', label: 'Activity History', shortLabel: 'Activity', icon: History },
   { id: 'insights', label: 'Smart Insights', shortLabel: 'Insights', icon: BarChart3 },
-  { id: 'settings', label: 'Profile and Settings', shortLabel: 'Settings', icon: Settings },
+  { id: 'settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
 ];
 
 function ZeroCrumbsWorkspace() {
@@ -292,12 +297,14 @@ function ZeroCrumbsWorkspace() {
 
   if (!authReady || verifyingAuth) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center mx-auto">
+          <div className="w-10 h-10 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white flex items-center justify-center mx-auto">
             <Leaf className="w-5 h-5" />
           </div>
-          <p className="text-sm font-medium text-[#1A2820]">Loading Zero Crumbs...</p>
+          <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED]">
+            Loading Zero Crumbs...
+          </p>
         </div>
       </div>
     );
@@ -325,15 +332,17 @@ function ZeroCrumbsWorkspace() {
 
   if (profileSyncError) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border border-[#E5E7E2] rounded-2xl p-6 sm:p-8 text-center space-y-4">
-          <div className="w-11 h-11 rounded-xl bg-[#FDF2EC] text-[#9E2F2F] flex items-center justify-center mx-auto">
+      <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6 sm:p-8 text-center space-y-4">
+          <div className="w-11 h-11 rounded-xl bg-[#FDF2EC] dark:bg-[#2B1B18] text-[#9E2F2F] dark:text-[#F5B0A6] flex items-center justify-center mx-auto">
             <Leaf className="w-5 h-5" />
           </div>
-          <h1 className="font-display text-xl font-semibold text-[#1A2820]">
+          <h1 className="font-display text-xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
             Account Sync Interrupted
           </h1>
-          <p className="text-sm text-[#5A6A60] leading-relaxed">{profileSyncError}</p>
+          <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4] leading-relaxed">
+            {profileSyncError}
+          </p>
           <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-1">
             <button
               type="button"
@@ -343,14 +352,14 @@ function ZeroCrumbsWorkspace() {
                 await syncVerifiedUserProfile(user);
                 setProfileRetrying(false);
               }}
-              className="min-h-[42px] px-5 py-2 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors cursor-pointer disabled:opacity-60"
+              className="min-h-[42px] px-5 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer disabled:opacity-60"
             >
               {profileRetrying ? 'Retrying...' : 'Retry Sync'}
             </button>
             <button
               type="button"
               onClick={() => void handleConfirmLogout()}
-              className="min-h-[42px] px-5 py-2 rounded-xl border border-[#DCE0D8] text-sm font-medium text-[#34443A] hover:bg-[#F4F5F2] transition-colors cursor-pointer"
+              className="min-h-[42px] px-5 py-2 rounded-xl border border-[#DCE0D8] dark:border-[#31483B] text-sm font-medium text-[#34443A] dark:text-[#C5D5CC] hover:bg-[#F4F5F2] dark:hover:bg-[#223129] transition-colors cursor-pointer"
             >
               Sign Out
             </button>
@@ -362,12 +371,14 @@ function ZeroCrumbsWorkspace() {
 
   if (profileReadyUid !== user.uid) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center mx-auto">
+          <div className="w-10 h-10 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white flex items-center justify-center mx-auto">
             <Leaf className="w-5 h-5" />
           </div>
-          <p className="text-sm font-medium text-[#1A2820]">Preparing your private pantry...</p>
+          <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED]">
+            Preparing your private pantry...
+          </p>
         </div>
       </div>
     );
@@ -411,9 +422,9 @@ function ZeroCrumbsWorkspace() {
   const userDisplayLabel = profile?.fullName || user.email || 'Zero Crumbs Member';
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] flex flex-col max-w-full overflow-x-clip">
+    <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex flex-col max-w-full overflow-x-clip">
       {/* Directly Visible Top Navigation Header (Desktop & Mobile) */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-[#E5E7E2]">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#151F1A]/95 backdrop-blur-xs border-b border-[#E5E7E2] dark:border-[#24322B]">
         <div className="max-w-[1360px] mx-auto px-3 sm:px-6 lg:px-8">
           {/* Top Brand & Utility Row */}
           <div className="h-14 sm:h-16 flex items-center justify-between gap-3">
@@ -422,21 +433,21 @@ function ZeroCrumbsWorkspace() {
               onClick={() => handleNavigate('home')}
               className="flex items-center gap-2.5 text-left cursor-pointer min-w-0"
             >
-              <div className="w-9 h-9 rounded-xl bg-[#1B4332] text-white flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white flex items-center justify-center shrink-0">
                 <Leaf className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-display text-base font-semibold text-[#1A2820] block leading-none truncate">
+                <span className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED] block leading-none truncate">
                   Zero Crumbs
                 </span>
-                <span className="hidden sm:block text-[11px] text-[#5A6A60] truncate mt-0.5">
+                <span className="hidden sm:block text-[11px] text-[#5A6A60] dark:text-[#9CB0A4] truncate mt-0.5">
                   Save Food. Reduce Waste. Share Goodness.
                 </span>
               </div>
             </button>
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <span className="hidden md:inline text-xs font-medium text-[#5A6A60] truncate max-w-[180px]">
+              <span className="hidden md:inline text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] truncate max-w-[180px]">
                 {userDisplayLabel}
               </span>
               <button
@@ -445,14 +456,14 @@ function ZeroCrumbsWorkspace() {
                   setEditingFood(null);
                   setFoodModalOpen(true);
                 }}
-                className="min-h-[38px] sm:min-h-[40px] px-3 sm:px-3.5 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="min-h-[38px] sm:min-h-[40px] px-3 sm:px-3.5 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 + Add Food
               </button>
               <button
                 type="button"
                 onClick={() => setLogoutConfirmOpen(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl border border-[#EBC6BA] bg-[#FDF2EC] text-xs font-medium text-[#9E2F2F] hover:bg-[#FAE4DA] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="hidden sm:inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl border border-[#EBC6BA] dark:border-[#68372E] bg-[#FDF2EC] dark:bg-[#2B1B18] text-xs font-medium text-[#9E2F2F] dark:text-[#F5B0A6] hover:bg-[#FAE4DA] dark:hover:bg-[#3A221E] transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Logout</span>
@@ -475,14 +486,14 @@ function ZeroCrumbsWorkspace() {
                   onClick={() => handleNavigate(item.id)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                     active
-                      ? 'bg-[#EEF3EC] text-[#1B4332]'
-                      : 'text-[#4F5E55] hover:bg-[#F4F5F2] hover:text-[#1A2820]'
+                      ? 'bg-[#EEF3EC] dark:bg-[#21352B] text-[#1B4332] dark:text-[#A3DFBC]'
+                      : 'text-[#4F5E55] dark:text-[#A5B7AC] hover:bg-[#F4F5F2] dark:hover:bg-[#1E2B24] hover:text-[#1A2820] dark:hover:text-[#EBF2ED]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span>{item.label}</span>
                   {item.id === 'expiring' && attentionCount > 0 && (
-                    <span className="ml-0.5 font-mono text-[11px] tabular-nums font-semibold text-[#B56A1B]">
+                    <span className="ml-0.5 font-mono text-[11px] tabular-nums font-semibold text-[#B56A1B] dark:text-[#E8B173]">
                       ({attentionCount})
                     </span>
                   )}
@@ -509,8 +520,8 @@ function ZeroCrumbsWorkspace() {
                   onClick={() => handleNavigate(item.id)}
                   className={`min-h-[40px] flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 border ${
                     active
-                      ? 'bg-[#1B4332] border-[#1B4332] text-white'
-                      : 'bg-[#FAF9F6] border-[#E5E7E2] text-[#34443A] hover:bg-[#F0F2EC]'
+                      ? 'bg-[#1B4332] dark:bg-[#2D6A4F] border-[#1B4332] dark:border-[#2D6A4F] text-white'
+                      : 'bg-[#FAF9F6] dark:bg-[#19241E] border-[#E5E7E2] dark:border-[#27362E] text-[#34443A] dark:text-[#C5D5CC] hover:bg-[#F0F2EC] dark:hover:bg-[#213028]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -518,7 +529,7 @@ function ZeroCrumbsWorkspace() {
                   {item.id === 'expiring' && attentionCount > 0 && (
                     <span
                       className={`font-mono text-[11px] tabular-nums font-semibold ${
-                        active ? 'text-[#DCEAD8]' : 'text-[#B56A1B]'
+                        active ? 'text-[#DCEAD8]' : 'text-[#B56A1B] dark:text-[#E8B173]'
                       }`}
                     >
                       {attentionCount}
@@ -530,7 +541,7 @@ function ZeroCrumbsWorkspace() {
             <button
               type="button"
               onClick={() => setLogoutConfirmOpen(true)}
-              className="min-h-[40px] flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-[#FDF2EC] border border-[#EBC6BA] text-[#9E2F2F] whitespace-nowrap shrink-0 cursor-pointer"
+              className="min-h-[40px] flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-[#FDF2EC] dark:bg-[#2B1B18] border border-[#EBC6BA] dark:border-[#68372E] text-[#9E2F2F] dark:text-[#F5B0A6] whitespace-nowrap shrink-0 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
               <span>Logout</span>
@@ -545,8 +556,8 @@ function ZeroCrumbsWorkspace() {
           <div
             className={`px-4 py-3 rounded-xl border text-sm flex items-center justify-between gap-3 ${
               toast.type === 'error'
-                ? 'bg-[#FDF2EC] border-[#EBC6BA] text-[#9E2F2F]'
-                : 'bg-[#EEF3EC] border-[#C7DBC9] text-[#1B4332]'
+                ? 'bg-[#FDF2EC] dark:bg-[#2B1B18] border-[#EBC6BA] dark:border-[#68372E] text-[#9E2F2F] dark:text-[#F5B0A6]'
+                : 'bg-[#EEF3EC] dark:bg-[#1D3127] border-[#C7DBC9] dark:border-[#335844] text-[#1B4332] dark:text-[#9CE0B8]'
             }`}
           >
             <span>{toast.text}</span>
@@ -635,12 +646,14 @@ function ZeroCrumbsWorkspace() {
         {page === 'add-food' && (
           <div className="max-w-2xl space-y-5">
             <div>
-              <h1 className="font-display text-2xl font-semibold text-[#1A2820]">Add Food</h1>
-              <p className="text-sm text-[#5A6A60]">
+              <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
+                Add Food
+              </h1>
+              <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
                 Log a new item into your Fridge, Freezer, or Pantry with an expiry date.
               </p>
             </div>
-            <div className="bg-white border border-[#E5E7E2] rounded-2xl p-4 sm:p-6">
+            <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-4 sm:p-6">
               <FoodForm
                 defaultLocation={profile?.defaultLocation || 'Fridge'}
                 onSave={async (data) => {
@@ -687,10 +700,10 @@ function ZeroCrumbsWorkspace() {
         {page === 'ai' && (
           <div className="space-y-4">
             <div>
-              <h1 className="font-display text-2xl font-semibold text-[#1A2820]">
+              <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                 Zero Crumbs AI Assistant
               </h1>
-              <p className="text-sm text-[#5A6A60]">
+              <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
                 Ask questions, request recipes, or instruct Zero Crumbs AI to manage your inventory
                 and donations.
               </p>
@@ -705,6 +718,7 @@ function ZeroCrumbsWorkspace() {
               setMessages={setAiMessages}
               queuedPrompt={queuedAiPrompt}
               onConsumeQueuedPrompt={() => setQueuedAiPrompt(null)}
+              onOpenVoiceSettings={() => handleNavigate('settings')}
             />
           </div>
         )}
@@ -729,6 +743,7 @@ function ZeroCrumbsWorkspace() {
         {page === 'settings' && (
           <ProfileSettingsView
             profile={profile}
+            foods={foods}
             onSaveProfile={async (updates) => {
               await updateUserProfile(user.uid, updates);
               showToast('Profile and reminder settings saved.');
@@ -739,7 +754,7 @@ function ZeroCrumbsWorkspace() {
       </main>
 
       {/* Clean Footer */}
-      <footer className="px-3 sm:px-6 lg:px-8 py-5 border-t border-[#E5E7E2] text-xs text-[#6B7A70] flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1360px] w-full mx-auto">
+      <footer className="px-3 sm:px-6 lg:px-8 py-5 border-t border-[#E5E7E2] dark:border-[#24322B] text-xs text-[#6B7A70] dark:text-[#90A498] flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1360px] w-full mx-auto">
         <span>Zero Crumbs — Save Food. Reduce Waste. Share Goodness.</span>
         <span>Private cloud-synced kitchen & donation platform</span>
       </footer>
@@ -749,7 +764,7 @@ function ZeroCrumbsWorkspace() {
         <button
           type="button"
           onClick={() => setAiDrawerOpen(true)}
-          className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-40 min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#1B4332] text-white shadow-lg hover:bg-[#143325] transition-all inline-flex items-center gap-2 text-sm font-medium cursor-pointer"
+          className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-40 min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white shadow-lg hover:bg-[#143325] dark:hover:bg-[#245740] transition-all inline-flex items-center gap-2 text-sm font-medium cursor-pointer"
         >
           <Sparkles className="w-4 h-4 text-[#DCEAD8]" />
           <span>Zero Crumbs AI</span>
@@ -770,6 +785,10 @@ function ZeroCrumbsWorkspace() {
           setMessages={setAiMessages}
           queuedPrompt={queuedAiPrompt}
           onConsumeQueuedPrompt={() => setQueuedAiPrompt(null)}
+          onOpenVoiceSettings={() => {
+            setAiDrawerOpen(false);
+            handleNavigate('settings');
+          }}
         />
       )}
 
@@ -855,7 +874,15 @@ export default function App() {
   useEffect(() => {
     const handler = () => setQuotaExceeded(true);
     window.addEventListener('gmp-quota-exceeded', handler);
-    return () => window.removeEventListener('gmp-quota-exceeded', handler);
+    const unsubTheme = subscribeSystemThemeChanges(() => {
+      if (getSavedThemePreference() === 'system') {
+        applyThemePreference('system', false);
+      }
+    });
+    return () => {
+      window.removeEventListener('gmp-quota-exceeded', handler);
+      unsubTheme();
+    };
   }, []);
 
   return (

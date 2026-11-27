@@ -410,17 +410,17 @@ export function CharityDashboard({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-[#1A2820]">
+          <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
             Charity & Food Donation Dashboard
           </h1>
-          <p className="text-sm text-[#5A6A60]">
+          <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
             Share safe, non-expired surplus food with verified local pantries, shelters, and NGOs.
           </p>
         </div>
         <button
           type="button"
           onClick={() => openNewModal(null)}
-          className="px-4 py-2.5 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+          className="px-4 py-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
         >
           <Plus className="w-4 h-4" />
           Create Donation Listing
@@ -429,43 +429,53 @@ export function CharityDashboard({
 
       {/* Overview KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1.5">Total Food Donated</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1B4332]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1.5">
+            Total Food Donated
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1B4332] dark:text-[#82C9A5]">
             {completedDonations.length}
           </p>
-          <p className="text-xs text-[#6B7A70] mt-1">Completed handoffs</p>
+          <p className="text-xs text-[#6B7A70] dark:text-[#869B8F] mt-1">Completed handoffs</p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1.5">Available Donations</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1A2820]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1.5">
+            Available Donations
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#1A2820] dark:text-[#EBF2ED]">
             {availableDonations.length}
           </p>
-          <p className="text-xs text-[#6B7A70] mt-1">Ready for pickup</p>
+          <p className="text-xs text-[#6B7A70] dark:text-[#869B8F] mt-1">Ready for pickup</p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1.5">Pending Requests</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#B56A1B]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1.5">
+            Pending Requests
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#B56A1B] dark:text-[#FBBF24]">
             {pendingRequests.length}
           </p>
-          <p className="text-xs text-[#6B7A70] mt-1">Awaiting approval</p>
+          <p className="text-xs text-[#6B7A70] dark:text-[#869B8F] mt-1">Awaiting approval</p>
         </div>
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl p-5">
-          <p className="text-xs font-medium text-[#5A6A60] mb-1.5">Total Listings</p>
-          <p className="font-mono text-2xl font-semibold tabular-nums text-[#355E4B]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-5">
+          <p className="text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] mb-1.5">
+            Total Listings
+          </p>
+          <p className="font-mono text-2xl font-semibold tabular-nums text-[#355E4B] dark:text-[#82C9A5]">
             {donations.length}
           </p>
-          <p className="text-xs text-[#6B7A70] mt-1">All-time shared items</p>
+          <p className="text-xs text-[#6B7A70] dark:text-[#869B8F] mt-1">All-time shared items</p>
         </div>
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-[#EFEFE9] rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 p-1 bg-[#EFEFE9] dark:bg-[#121B16] rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => setActiveTab('listings')}
           className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'listings' ? 'bg-white text-[#1A2820] shadow-xs' : 'text-[#5A6A60]'
+            activeTab === 'listings'
+              ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+              : 'text-[#5A6A60] dark:text-[#9CB0A4]'
           }`}
         >
           Active Listings ({activeListings.length})
@@ -474,7 +484,9 @@ export function CharityDashboard({
           type="button"
           onClick={() => setActiveTab('requests')}
           className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'requests' ? 'bg-white text-[#1A2820] shadow-xs' : 'text-[#5A6A60]'
+            activeTab === 'requests'
+              ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+              : 'text-[#5A6A60] dark:text-[#9CB0A4]'
           }`}
         >
           Donation Requests ({requests.length})
@@ -483,7 +495,9 @@ export function CharityDashboard({
           type="button"
           onClick={() => setActiveTab('history')}
           className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'history' ? 'bg-white text-[#1A2820] shadow-xs' : 'text-[#5A6A60]'
+            activeTab === 'history'
+              ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+              : 'text-[#5A6A60] dark:text-[#9CB0A4]'
           }`}
         >
           Completed & Past ({donations.length - activeListings.length})
@@ -494,19 +508,19 @@ export function CharityDashboard({
       {activeTab === 'listings' && (
         <div className="space-y-4">
           {activeListings.length === 0 ? (
-            <div className="bg-white border border-[#E5E7E2] rounded-2xl p-10 text-center">
-              <HeartHandshake className="w-8 h-8 text-[#52796F] mx-auto mb-3" />
-              <p className="text-base font-medium text-[#1A2820] mb-1">
+            <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-10 text-center">
+              <HeartHandshake className="w-8 h-8 text-[#52796F] dark:text-[#82C9A5] mx-auto mb-3" />
+              <p className="text-base font-medium text-[#1A2820] dark:text-[#EBF2ED] mb-1">
                 No active surplus listings yet
               </p>
-              <p className="text-sm text-[#5A6A60] mb-5 max-w-md mx-auto">
+              <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4] mb-5 max-w-md mx-auto">
                 Share unopened or safe surplus food before expiry so local community pantries can
                 put it to good use.
               </p>
               <button
                 type="button"
                 onClick={() => openNewModal(null)}
-                className="px-4 py-2.5 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] cursor-pointer"
               >
                 List Surplus Food
               </button>
@@ -521,42 +535,42 @@ export function CharityDashboard({
                 return (
                   <div
                     key={don.id}
-                    className="bg-white border border-[#E5E7E2] rounded-2xl overflow-hidden flex flex-col"
+                    className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl overflow-hidden flex flex-col"
                   >
-                    <div className="aspect-[16/9] bg-[#F2F4EF]">
+                    <div className="aspect-[16/9] bg-[#F2F4EF] dark:bg-[#1F2D25]">
                       <FoodImage src={don.imageUrl} alt={don.foodName} />
                     </div>
                     <div className="p-5 flex-1 flex flex-col justify-between gap-4">
                       <div className="space-y-3">
                         <div>
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <h3 className="font-display text-base font-semibold text-[#1A2820]">
+                            <h3 className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                               {don.foodName}
                             </h3>
-                            <span className="font-mono text-xs font-semibold tabular-nums text-[#1B4332]">
+                            <span className="font-mono text-xs font-semibold tabular-nums text-[#1B4332] dark:text-[#82C9A5]">
                               {formatQuantity(don.quantity, don.unit)}
                             </span>
                           </div>
-                          <p className="text-xs text-[#5A6A60]">
+                          <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                             {don.category} · Best before {formatShortDate(don.expiryDate)} · Status:{' '}
-                            <strong className="text-[#1A2820]">{don.status}</strong>
+                            <strong className="text-[#1A2820] dark:text-[#EBF2ED]">{don.status}</strong>
                           </p>
                         </div>
 
                         {/* Exact Pickup Address & Coordinates */}
-                        <div className="p-3 rounded-xl bg-[#FAF9F6] border border-[#ECEEE8] space-y-1.5">
+                        <div className="p-3 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#ECEEE8] dark:border-[#24322B] space-y-1.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-[11px] font-semibold text-[#34443A] flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-[#1B4332] shrink-0" />
+                              <p className="text-[11px] font-semibold text-[#34443A] dark:text-[#B8C7BE] flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-[#1B4332] dark:text-[#82C9A5] shrink-0" />
                                 Pickup Address
                               </p>
-                              <p className="text-xs text-[#1A2820] mt-0.5 break-words">
+                              <p className="text-xs text-[#1A2820] dark:text-[#EBF2ED] mt-0.5 break-words">
                                 {don.pickupAddress || don.pickupLocation}
                               </p>
                               {typeof don.pickupLatitude === 'number' &&
                                 typeof don.pickupLongitude === 'number' && (
-                                  <p className="text-[10px] font-mono text-[#6B7A70] tabular-nums mt-0.5">
+                                  <p className="text-[10px] font-mono text-[#6B7A70] dark:text-[#869B8F] tabular-nums mt-0.5">
                                     Pin: {don.pickupLatitude.toFixed(5)},{' '}
                                     {don.pickupLongitude.toFixed(5)}
                                   </p>
@@ -567,7 +581,7 @@ export function CharityDashboard({
                                 href={directionsHref}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-2.5 py-1.5 rounded-lg bg-white border border-[#DCE0D8] text-[11px] font-medium text-[#1B4332] hover:bg-[#EEF3EC] inline-flex items-center gap-1 shrink-0"
+                                className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-[11px] font-medium text-[#1B4332] dark:text-[#82C9A5] hover:bg-[#EEF3EC] dark:hover:bg-[#1F2D25] inline-flex items-center gap-1 shrink-0"
                               >
                                 <Navigation className="w-3 h-3" />
                                 Get Directions
@@ -578,37 +592,39 @@ export function CharityDashboard({
 
                         {/* Selected Charity Organisation & Private Donor Handoff Card */}
                         {(selectedOrg || don.charityPartner || don.donorPhone) && (
-                          <div className="p-3 rounded-xl bg-[#EEF3EC]/70 border border-[#C7DBC9] space-y-2">
+                          <div className="p-3 rounded-xl bg-[#EEF3EC]/70 dark:bg-[#1B3328]/70 border border-[#C7DBC9] dark:border-[#2E4D3E] space-y-2">
                             {(selectedOrg || don.charityPartner) && (
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-[11px] font-semibold text-[#1B4332] flex items-center gap-1">
+                                  <p className="text-[11px] font-semibold text-[#1B4332] dark:text-[#82C9A5] flex items-center gap-1">
                                     <Building2 className="w-3.5 h-3.5 shrink-0" />
                                     Selected Charity Organisation
                                   </p>
                                   {selectedOrg?.distanceMeters !== undefined && (
-                                    <span className="text-[11px] font-mono text-[#1B4332] tabular-nums">
+                                    <span className="text-[11px] font-mono text-[#1B4332] dark:text-[#82C9A5] tabular-nums">
                                       {formatDistanceLabel(selectedOrg.distanceMeters)}
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs font-semibold text-[#1A2820]">
+                                <p className="text-xs font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                                   {selectedOrg?.name || don.charityPartner}
                                   {selectedOrg?.category ? (
-                                    <span className="font-normal text-[#5A6A60]">
+                                    <span className="font-normal text-[#5A6A60] dark:text-[#9CB0A4]">
                                       {' '}
                                       · {selectedOrg.category}
                                     </span>
                                   ) : null}
                                 </p>
                                 {selectedOrg?.address && (
-                                  <p className="text-[11px] text-[#4F5E55]">{selectedOrg.address}</p>
+                                  <p className="text-[11px] text-[#4F5E55] dark:text-[#B8C7BE]">
+                                    {selectedOrg.address}
+                                  </p>
                                 )}
                                 <div className="flex flex-wrap items-center gap-2 pt-0.5">
                                   {selectedOrg?.phone && (
                                     <a
                                       href={`tel:${selectedOrg.phone.replace(/[^\d+]/g, '')}`}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#C7DBC9] text-[11px] font-medium text-[#1B4332] hover:bg-[#FAF9F6]"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-[#17211C] border border-[#C7DBC9] dark:border-[#2E4D3E] text-[11px] font-medium text-[#1B4332] dark:text-[#82C9A5] hover:bg-[#FAF9F6] dark:hover:bg-[#1F2D25]"
                                     >
                                       <Phone className="w-3 h-3" />
                                       Call Charity ({selectedOrg.phone})
@@ -619,7 +635,7 @@ export function CharityDashboard({
                                       href={selectedOrg.googleMapsUri}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#C7DBC9] text-[11px] font-medium text-[#34443A] hover:bg-[#FAF9F6]"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-[#17211C] border border-[#C7DBC9] dark:border-[#2E4D3E] text-[11px] font-medium text-[#34443A] dark:text-[#B8C7BE] hover:bg-[#FAF9F6] dark:hover:bg-[#1F2D25]"
                                     >
                                       <ExternalLink className="w-3 h-3" />
                                       Google Maps
@@ -631,20 +647,20 @@ export function CharityDashboard({
 
                             {/* Private Donor Contact for Selected Charity Pickup */}
                             {don.donorPhone && (
-                              <div className="pt-2 border-t border-[#C7DBC9]/70 flex flex-wrap items-center justify-between gap-2">
+                              <div className="pt-2 border-t border-[#C7DBC9]/70 dark:border-[#2E4D3E] flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                  <p className="text-[10px] font-medium text-[#355E4B] flex items-center gap-1">
+                                  <p className="text-[10px] font-medium text-[#355E4B] dark:text-[#82C9A5] flex items-center gap-1">
                                     <Lock className="w-3 h-3 shrink-0" />
                                     Donor Contact (Shared only with selected organisation)
                                   </p>
-                                  <p className="text-xs font-mono font-medium text-[#1A2820]">
+                                  <p className="text-xs font-mono font-medium text-[#1A2820] dark:text-[#EBF2ED]">
                                     {don.donorPhone}
                                   </p>
                                 </div>
                                 {telNumber && (
                                   <a
                                     href={`tel:${telNumber}`}
-                                    className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] inline-flex items-center gap-1.5 shrink-0"
+                                    className="px-3 py-1.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] inline-flex items-center gap-1.5 shrink-0"
                                   >
                                     <Phone className="w-3.5 h-3.5" />
                                     Call Donor
@@ -656,15 +672,17 @@ export function CharityDashboard({
                         )}
 
                         {!don.donorPhone && don.contactInfo && (
-                          <p className="text-xs text-[#4F5E55]">Contact: {don.contactInfo}</p>
+                          <p className="text-xs text-[#4F5E55] dark:text-[#9CB0A4]">
+                            Contact: {don.contactInfo}
+                          </p>
                         )}
 
                         {don.notes && (
-                          <p className="text-xs text-[#5A6A60]">{don.notes}</p>
+                          <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">{don.notes}</p>
                         )}
                       </div>
 
-                      <div className="space-y-2 pt-3 border-t border-[#ECEEE8]">
+                      <div className="space-y-2 pt-3 border-t border-[#ECEEE8] dark:border-[#24322B]">
                         <div className="flex flex-wrap items-center gap-2">
                           <select
                             aria-label={`Change status for ${don.foodName}`}
@@ -672,7 +690,7 @@ export function CharityDashboard({
                             onChange={(e) =>
                               void onTransitionStatus(don, e.target.value as DonationStatus)
                             }
-                            className="px-3 py-1.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-xs font-medium text-[#1A2820]"
+                            className="px-3 py-1.5 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-xs font-medium text-[#1A2820] dark:text-[#EBF2ED]"
                           >
                             {DONATION_STATUSES.map((st) => (
                               <option key={st} value={st}>
@@ -689,7 +707,7 @@ export function CharityDashboard({
                                 setReqOrgName(don.selectedOrganisation.name);
                               }
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] text-xs font-medium hover:bg-[#DFEBDD] dark:hover:bg-[#244234] transition-colors inline-flex items-center gap-1 cursor-pointer"
                           >
                             <UserPlus className="w-3.5 h-3.5" />
                             Log Partner Request
@@ -697,7 +715,7 @@ export function CharityDashboard({
                           <button
                             type="button"
                             onClick={() => openEditModal(don)}
-                            className="p-1.5 rounded-xl border border-[#DCE0D8] text-[#34443A] hover:bg-[#F4F5F2] cursor-pointer"
+                            className="p-1.5 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] text-[#34443A] dark:text-[#B8C7BE] hover:bg-[#F4F5F2] dark:hover:bg-[#1F2D25] cursor-pointer"
                             title="Edit listing"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -714,9 +732,9 @@ export function CharityDashboard({
       )}
 
       {activeTab === 'requests' && (
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl divide-y divide-[#ECEEE8]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl divide-y divide-[#ECEEE8] dark:divide-[#24322B]">
           {requests.length === 0 ? (
-            <div className="p-10 text-center text-sm text-[#5A6A60]">
+            <div className="p-10 text-center text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
               No charity or NGO pickup requests recorded yet. Use “Log Partner Request” on any active
               listing to coordinate a pickup.
             </div>
@@ -732,21 +750,27 @@ export function CharityDashboard({
                 >
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-sm text-[#1A2820]">
+                      <h3 className="font-medium text-sm text-[#1A2820] dark:text-[#EBF2ED]">
                         {reqItem.requesterName}
                       </h3>
-                      <span className="text-xs text-[#5A6A60]">· {reqItem.organizationType}</span>
-                      <span className="text-xs font-medium text-[#1B4332]">· {reqItem.status}</span>
+                      <span className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
+                        · {reqItem.organizationType}
+                      </span>
+                      <span className="text-xs font-medium text-[#1B4332] dark:text-[#82C9A5]">
+                        · {reqItem.status}
+                      </span>
                     </div>
-                    <p className="text-xs text-[#4F5E55]">
+                    <p className="text-xs text-[#4F5E55] dark:text-[#9CB0A4]">
                       Requested{' '}
-                      <strong className="font-mono tabular-nums">
+                      <strong className="font-mono tabular-nums text-[#1A2820] dark:text-[#EBF2ED]">
                         {formatQuantity(reqItem.requestedQuantity, reqItem.unit)}
                       </strong>{' '}
                       of {reqItem.foodName} · Pickup window: {reqItem.pickupWindow}
                     </p>
                     {reqItem.message && (
-                      <p className="text-xs text-[#5A6A60] mt-1">{reqItem.message}</p>
+                      <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4] mt-1">
+                        {reqItem.message}
+                      </p>
                     )}
                   </div>
 
@@ -758,7 +782,7 @@ export function CharityDashboard({
                           onClick={() =>
                             void onUpdateRequestStatus(reqItem, linkedDon, 'Approved')
                           }
-                          className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-medium hover:bg-[#143325] cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium hover:bg-[#143325] dark:hover:bg-[#245740] cursor-pointer"
                         >
                           Approve
                         </button>
@@ -766,14 +790,14 @@ export function CharityDashboard({
                       <button
                         type="button"
                         onClick={() => void onUpdateRequestStatus(reqItem, linkedDon, 'Collected')}
-                        className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] text-[#1B4332] text-xs font-medium hover:bg-[#DFEBDD] cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] text-xs font-medium hover:bg-[#DFEBDD] dark:hover:bg-[#244234] cursor-pointer"
                       >
                         Mark Collected
                       </button>
                       <button
                         type="button"
                         onClick={() => void onUpdateRequestStatus(reqItem, linkedDon, 'Declined')}
-                        className="px-3 py-1.5 rounded-xl border border-[#DCE0D8] text-xs font-medium text-[#9E2F2F] hover:bg-[#FDF2EC] cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl border border-[#DCE0D8] dark:border-[#6B3232] text-xs font-medium text-[#9E2F2F] dark:text-[#FCA5A5] hover:bg-[#FDF2EC] dark:hover:bg-[#331B1B] cursor-pointer"
                       >
                         Decline
                       </button>
@@ -787,9 +811,9 @@ export function CharityDashboard({
       )}
 
       {activeTab === 'history' && (
-        <div className="bg-white border border-[#E5E7E2] rounded-2xl divide-y divide-[#ECEEE8]">
+        <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl divide-y divide-[#ECEEE8] dark:divide-[#24322B]">
           {donations.filter((d) => d.status === 'Donated' || d.status === 'Cancelled').length === 0 ? (
-            <div className="p-10 text-center text-sm text-[#5A6A60]">
+            <div className="p-10 text-center text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
               Completed and cancelled donations will appear here.
             </div>
           ) : (
@@ -801,17 +825,17 @@ export function CharityDashboard({
                   className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#E5E7E2] shrink-0">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#E5E7E2] dark:border-[#27362E] shrink-0">
                       <FoodImage src={don.imageUrl} alt={don.foodName} />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-[#1A2820]">
+                      <p className="text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED]">
                         {don.foodName} ·{' '}
                         <span className="font-mono tabular-nums">
                           {formatQuantity(don.quantity, don.unit)}
                         </span>
                       </p>
-                      <p className="text-xs text-[#5A6A60]">
+                      <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                         {don.pickupLocation}
                         {don.charityPartner ? ` · Shared with ${don.charityPartner}` : ''}
                       </p>
@@ -820,12 +844,16 @@ export function CharityDashboard({
                   <div className="text-right">
                     <p
                       className={`text-xs font-semibold ${
-                        don.status === 'Donated' ? 'text-[#1B4332]' : 'text-[#6B7A70]'
+                        don.status === 'Donated'
+                          ? 'text-[#1B4332] dark:text-[#82C9A5]'
+                          : 'text-[#6B7A70] dark:text-[#90A498]'
                       }`}
                     >
                       {don.status}
                     </p>
-                    <p className="text-[11px] text-[#6B7A70]">{formatTimestamp(don.updatedAt)}</p>
+                    <p className="text-[11px] text-[#6B7A70] dark:text-[#869B8F]">
+                      {formatTimestamp(don.updatedAt)}
+                    </p>
                   </div>
                 </div>
               ))
@@ -835,14 +863,14 @@ export function CharityDashboard({
 
       {/* Create / Edit Donation Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A2820]/40 backdrop-blur-[2px] p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl bg-white border border-[#E5E7E2] rounded-2xl p-4 sm:p-6 shadow-xl my-auto max-h-[92dvh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 mb-5 border-b border-[#E5E7E2]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A2820]/40 dark:bg-black/65 backdrop-blur-[2px] p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-4 sm:p-6 shadow-xl my-auto max-h-[92dvh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 mb-5 border-b border-[#E5E7E2] dark:border-[#27362E]">
               <div>
-                <h2 className="font-display text-lg font-semibold text-[#1A2820]">
+                <h2 className="font-display text-lg font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                   {editingDonation ? 'Edit Donation Listing' : 'Create Surplus Donation Listing'}
                 </h2>
-                <p className="text-xs text-[#5A6A60]">
+                <p className="text-xs text-[#5A6A60] dark:text-[#9CB0A4]">
                   Set your exact pickup pin on Google Maps, verify your phone number, and select a
                   nearby charity organisation.
                 </p>
@@ -853,7 +881,7 @@ export function CharityDashboard({
                   setShowCreateModal(false);
                   onClearPrefill();
                 }}
-                className="p-2 rounded-xl text-[#5A6A60] hover:bg-[#F2F4EF] cursor-pointer"
+                className="p-2 rounded-xl text-[#5A6A60] dark:text-[#9CB0A4] hover:bg-[#F2F4EF] dark:hover:bg-[#1F2D25] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -861,20 +889,20 @@ export function CharityDashboard({
 
             <form onSubmit={handleSaveDonation} className="space-y-5">
               {formError && (
-                <div className="p-3 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-sm text-[#9E2F2F]">
+                <div className="p-3 rounded-xl bg-[#FDF2EC] dark:bg-[#331B1B] border border-[#EBC6BA] dark:border-[#6B3232] text-sm text-[#9E2F2F] dark:text-[#FCA5A5]">
                   {formError}
                 </div>
               )}
 
               {!editingDonation && safeActiveFoods.length > 0 && (
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1.5">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1.5">
                     Select from Your Fresh Inventory (optional)
                   </label>
                   <select
                     value={selectedFoodId}
                     onChange={(e) => handleSelectInventorySource(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-sm text-[#1A2820]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   >
                     <option value="standalone">Enter a new surplus item manually</option>
                     {safeActiveFoods.map((f) => (
@@ -889,7 +917,7 @@ export function CharityDashboard({
               {/* Step 1: Food Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Food Name *
                   </label>
                   <input
@@ -897,12 +925,12 @@ export function CharityDashboard({
                     value={foodName}
                     onChange={(e) => setFoodName(e.target.value)}
                     placeholder="e.g., Unopened Canned Beans, Fresh Apples"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Available Quantity *
                   </label>
                   <input
@@ -911,16 +939,18 @@ export function CharityDashboard({
                     min="0.01"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm font-mono tabular-nums"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-mono tabular-nums text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">Unit *</label>
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
+                    Unit *
+                  </label>
                   <select
                     value={unit}
                     onChange={(e) => setUnit(e.target.value as FoodUnit)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   >
                     {FOOD_UNITS.map((u) => (
                       <option key={u} value={u}>
@@ -931,13 +961,13 @@ export function CharityDashboard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Food Category *
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as FoodCategory)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   >
                     {FOOD_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -948,20 +978,20 @@ export function CharityDashboard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Expiry Date *
                   </label>
                   <input
                     type="date"
                     value={expiryDate}
                     onChange={(e) => setExpiryDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm font-mono tabular-nums"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-mono tabular-nums text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
               </div>
 
               {/* Step 2 & 4: Interactive Google Map Pickup Selector & Nearby Charities */}
-              <div className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#E5E7E2] space-y-3">
+              <div className="p-4 rounded-2xl bg-[#FAF9F6] dark:bg-[#121B16] border border-[#E5E7E2] dark:border-[#27362E] space-y-3">
                 <DonationPickupMapSelector
                   value={pickupLocationValue}
                   selectedOrganisation={selectedOrganisation}
@@ -978,7 +1008,7 @@ export function CharityDashboard({
                 />
 
                 {selectedOrganisation && (
-                  <div className="p-3 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] flex items-center justify-between gap-2 text-xs text-[#1B4332]">
+                  <div className="p-3 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] border border-[#C7DBC9] dark:border-[#2E4D3E] flex items-center justify-between gap-2 text-xs text-[#1B4332] dark:text-[#CBE0D2]">
                     <span>
                       Selected organisation: <strong>{selectedOrganisation.name}</strong> (
                       {selectedOrganisation.address})
@@ -1000,7 +1030,7 @@ export function CharityDashboard({
               {/* Step 3: Mandatory Donor Contact Phone & Additional Notes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Donor Contact Phone Number *
                   </label>
                   <input
@@ -1009,16 +1039,16 @@ export function CharityDashboard({
                     value={donorPhone}
                     onChange={(e) => setDonorPhone(e.target.value)}
                     placeholder="e.g., +91 98765 43210"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm font-mono"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-mono text-[#1A2820] dark:text-[#EBF2ED]"
                   />
-                  <p className="text-[11px] text-[#6B7A70] mt-1 flex items-center gap-1">
+                  <p className="text-[11px] text-[#6B7A70] dark:text-[#869B8F] mt-1 flex items-center gap-1">
                     <Lock className="w-3 h-3 shrink-0" />
                     Private: shared only with the selected charity organisation for pickup.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Pickup Coordination Email / Backup Note *
                   </label>
                   <input
@@ -1026,12 +1056,12 @@ export function CharityDashboard({
                     value={contactInfo}
                     onChange={(e) => setContactInfo(e.target.value)}
                     placeholder="Email or alternate pickup note"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Additional Notes (allergens, gate code, pickup hours)
                   </label>
                   <input
@@ -1039,12 +1069,12 @@ export function CharityDashboard({
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="e.g., Sealed factory packaging, pickup before 7 PM"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
               </div>
 
-              <label className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] text-xs text-[#1B4332] cursor-pointer">
+              <label className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] border border-[#C7DBC9] dark:border-[#2E4D3E] text-xs text-[#1B4332] dark:text-[#CBE0D2] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={safetyConfirmed}
@@ -1067,14 +1097,14 @@ export function CharityDashboard({
                     setShowCreateModal(false);
                     onClearPrefill();
                   }}
-                  className="px-4 py-2.5 rounded-xl border border-[#DCE0D8] text-sm font-medium text-[#34443A]"
+                  className="px-4 py-2.5 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-medium text-[#34443A] dark:text-[#B8C7BE] hover:bg-[#F4F5F2] dark:hover:bg-[#1F2D25] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2.5 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2.5 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] cursor-pointer disabled:opacity-60"
                 >
                   {saving ? 'Publishing...' : editingDonation ? 'Save Changes' : 'Publish Donation'}
                 </button>
@@ -1086,23 +1116,23 @@ export function CharityDashboard({
 
       {/* Log Charity Partner Pickup Request Modal */}
       {requestTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A2820]/40 backdrop-blur-[2px] p-4">
-          <div className="w-full max-w-md bg-white border border-[#E5E7E2] rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E5E7E2]">
-              <h3 className="font-display text-base font-semibold text-[#1A2820]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A2820]/40 dark:bg-black/65 backdrop-blur-[2px] p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6 shadow-xl">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E5E7E2] dark:border-[#27362E]">
+              <h3 className="font-display text-base font-semibold text-[#1A2820] dark:text-[#EBF2ED]">
                 Log Request for {requestTarget.foodName}
               </h3>
               <button
                 type="button"
                 onClick={() => setRequestTarget(null)}
-                className="p-1.5 rounded-lg text-[#5A6A60] hover:bg-[#F2F4EF]"
+                className="p-1.5 rounded-lg text-[#5A6A60] dark:text-[#9CB0A4] hover:bg-[#F2F4EF] dark:hover:bg-[#1F2D25]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSubmitPartnerRequest} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-medium text-[#34443A] mb-1">
+                <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                   Charity / Organization Name *
                 </label>
                 <input
@@ -1111,18 +1141,18 @@ export function CharityDashboard({
                   value={reqOrgName}
                   onChange={(e) => setReqOrgName(e.target.value)}
                   placeholder="e.g., Green Valley Community Pantry"
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#DCE0D8] text-sm"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Partner Type
                   </label>
                   <select
                     value={reqOrgType}
                     onChange={(e) => setReqOrgType(e.target.value as OrganizationType)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#DCE0D8] text-sm"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                   >
                     {ORGANIZATION_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -1132,7 +1162,7 @@ export function CharityDashboard({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#34443A] mb-1">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                     Quantity ({requestTarget.unit})
                   </label>
                   <input
@@ -1142,12 +1172,12 @@ export function CharityDashboard({
                     max={requestTarget.quantity}
                     value={reqQty}
                     onChange={(e) => setReqQty(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#DCE0D8] text-sm font-mono tabular-nums"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-mono tabular-nums text-[#1A2820] dark:text-[#EBF2ED]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#34443A] mb-1">
+                <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                   Pickup Window *
                 </label>
                 <input
@@ -1155,11 +1185,11 @@ export function CharityDashboard({
                   required
                   value={reqWindow}
                   onChange={(e) => setReqWindow(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#DCE0D8] text-sm"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#34443A] mb-1">
+                <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                   Message (optional)
                 </label>
                 <input
@@ -1167,21 +1197,21 @@ export function CharityDashboard({
                   value={reqMsg}
                   onChange={(e) => setReqMsg(e.target.value)}
                   placeholder="Volunteer pickup notes"
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#DCE0D8] text-sm"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED]"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setRequestTarget(null)}
-                  className="px-4 py-2 rounded-xl border border-[#DCE0D8] text-xs font-medium"
+                  className="px-4 py-2 rounded-xl border border-[#DCE0D8] dark:border-[#2B3B32] text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] hover:bg-[#F4F5F2] dark:hover:bg-[#1F2D25] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-[#1B4332] text-white text-xs font-medium inline-flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:bg-[#143325] dark:hover:bg-[#245740] cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Save Request

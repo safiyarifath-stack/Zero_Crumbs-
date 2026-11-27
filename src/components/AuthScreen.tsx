@@ -621,39 +621,41 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
 
   if (unverifiedUser) {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-4 sm:p-6">
-        <div className="max-w-md w-full bg-white border border-[#E5E7E2] rounded-2xl p-6 sm:p-8 space-y-5 shadow-xs">
-          <div className="w-12 h-12 rounded-xl bg-[#EEF3EC] text-[#1B4332] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-md w-full bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6 sm:p-8 space-y-5 shadow-xs">
+          <div className="w-12 h-12 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] text-[#1B4332] dark:text-[#82C9A5] flex items-center justify-center">
             <MailCheck className="w-6 h-6" />
           </div>
 
           <div>
-            <h1 className="font-display text-2xl font-semibold text-[#1A2820] mb-2">
+            <h1 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-2">
               Verify your email via OTP
             </h1>
-            <p className="text-sm text-[#4F5E55] leading-relaxed">
+            <p className="text-sm text-[#4F5E55] dark:text-[#9CB0A4] leading-relaxed">
               Only verified accounts can access your private Zero Crumbs workspace. Send a 6-digit
               OTP verification code to{' '}
-              <span className="font-medium text-[#1A2820]">{unverifiedUser.email}</span> to unlock
-              your account.
+              <span className="font-medium text-[#1A2820] dark:text-[#EBF2ED]">
+                {unverifiedUser.email}
+              </span>{' '}
+              to unlock your account.
             </p>
           </div>
 
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-[#FDF2EC] border border-[#F0CFC4] text-sm text-[#9E2F2F]">
+            <div className="p-3.5 rounded-xl bg-[#FDF2EC] dark:bg-[#331B1B] border border-[#F0CFC4] dark:border-[#6B3232] text-sm text-[#9E2F2F] dark:text-[#FCA5A5]">
               {errorMsg}
             </div>
           )}
 
           {infoMsg && (
-            <div className="p-3.5 rounded-xl bg-[#EEF3EC] border border-[#CFE0D2] text-sm text-[#1B4332] flex items-start gap-2.5">
+            <div className="p-3.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] border border-[#CFE0D2] dark:border-[#2E4D3E] text-sm text-[#1B4332] dark:text-[#82C9A5] flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{infoMsg}</span>
             </div>
           )}
 
           {needsEmailDeliverySetup && (
-            <div className="p-4 rounded-xl bg-[#FBF4E9] border border-[#E7D4B5] text-xs text-[#614721] space-y-1.5">
+            <div className="p-4 rounded-xl bg-[#FBF4E9] dark:bg-[#2C2214] border border-[#E7D4B5] dark:border-[#5C4421] text-xs text-[#614721] dark:text-[#FCD34D] space-y-1.5">
               <p className="font-semibold">Email OTP delivery needs server configuration:</p>
               <p>
                 Add <code className="font-mono">APPS_SCRIPT_EMAIL_URL</code> (free Google Apps
@@ -670,7 +672,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                 type="button"
                 disabled={loading || !unverifiedUser.email}
                 onClick={handleRequestExistingVerificationOtp}
-                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                 {loading ? 'Sending OTP...' : 'Send 6-Digit Email OTP'}
@@ -681,7 +683,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                   type="button"
                   disabled={loading}
                   onClick={() => void handleConnectGmailOnUnverifiedScreen()}
-                  className="w-full min-h-[44px] py-2.5 px-4 rounded-md bg-white border border-[#DADCE0] text-sm font-medium text-[#3C4043] hover:bg-[#F8F9FA] transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60"
+                  className="w-full min-h-[44px] py-2.5 px-4 rounded-md bg-white dark:bg-[#0F1713] border border-[#DADCE0] dark:border-[#2B3B32] text-sm font-medium text-[#3C4043] dark:text-[#EBF2ED] hover:bg-[#F8F9FA] dark:hover:bg-[#1F2D25] transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -708,7 +710,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               <button
                 type="button"
                 onClick={() => signOut(auth)}
-                className="w-full min-h-[44px] py-2 text-sm text-[#5A6A60] hover:text-[#1A2820] transition-colors cursor-pointer"
+                className="w-full min-h-[44px] py-2 text-sm text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] transition-colors cursor-pointer"
               >
                 Sign out and use another account
               </button>
@@ -717,10 +719,10 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
             <form onSubmit={handleVerifyExistingOtp} className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-[#34443A]">
+                  <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE]">
                     6-Digit Email OTP
                   </label>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-[#5A6A60]">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[#5A6A60] dark:text-[#9CB0A4]">
                     <Clock className="w-3 h-3" />
                     Expires in 5 mins
                   </span>
@@ -733,25 +735,25 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="••••••"
-                  className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-center font-mono text-xl tracking-[0.4em] text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                  className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-center font-mono text-xl tracking-[0.4em] text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading || otpCode.length !== 6}
-                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {loading ? 'Verifying OTP...' : 'Verify Email & Open Workspace'}
                 {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
 
-              <div className="pt-3 border-t border-[#ECEEE8] flex items-center justify-between gap-2 text-xs">
+              <div className="pt-3 border-t border-[#ECEEE8] dark:border-[#24322B] flex items-center justify-between gap-2 text-xs">
                 <button
                   type="button"
                   onClick={() => signOut(auth)}
-                  className="text-[#5A6A60] hover:text-[#1A2820] cursor-pointer min-h-[36px]"
+                  className="text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] cursor-pointer min-h-[36px]"
                 >
                   Sign out
                 </button>
@@ -759,7 +761,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                   type="button"
                   disabled={resendSeconds > 0 || loading}
                   onClick={handleRequestExistingVerificationOtp}
-                  className="font-medium text-[#1B4332] hover:underline disabled:text-[#6B7A70] disabled:no-underline cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
+                  className="font-medium text-[#1B4332] dark:text-[#82C9A5] hover:underline disabled:text-[#6B7A70] dark:disabled:text-[#6E8277] disabled:no-underline cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
                 >
                   {resendSeconds > 0 ? `Resend OTP in ${resendSeconds}s` : 'Resend OTP'}
                 </button>
@@ -787,7 +789,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] grid grid-cols-1 lg:grid-cols-12">
+    <div className="min-h-screen bg-[#FAF9F6] dark:bg-[#0F1713] grid grid-cols-1 lg:grid-cols-12">
       {/* Left Brand & Editorial Showcase */}
       <div className="lg:col-span-6 bg-[#1B3B2B] text-white p-6 sm:p-8 lg:p-14 flex flex-col justify-between relative overflow-hidden">
         <div className="relative z-10">
@@ -836,7 +838,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
         <div className="w-full max-w-md">
           {pendingOtpSignup ? (
             /* Dedicated 6-Digit Email OTP Verification Screen for Signup */
-            <div className="bg-white border border-[#E5E7E2] rounded-2xl p-6 sm:p-7 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-[#17211C] border border-[#E5E7E2] dark:border-[#27362E] rounded-2xl p-6 sm:p-7 space-y-5 shadow-xs">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
@@ -844,35 +846,38 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                     clearOtpFlow();
                     resetNotices();
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#5A6A60] hover:text-[#1A2820] cursor-pointer min-h-[36px]"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] cursor-pointer min-h-[36px]"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   Edit details
                 </button>
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-[#1B4332]">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[#1B4332] dark:text-[#82C9A5]">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Email OTP
                 </span>
               </div>
 
               <div>
-                <h2 className="font-display text-xl font-semibold text-[#1A2820] mb-1">
+                <h2 className="font-display text-xl font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-1">
                   Verify your email address
                 </h2>
-                <p className="text-sm text-[#5A6A60]">
+                <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
                   Enter the 6-digit verification code sent to{' '}
-                  <strong className="text-[#1A2820] break-all">{pendingOtpSignup.email}</strong>.
+                  <strong className="text-[#1A2820] dark:text-[#EBF2ED] break-all">
+                    {pendingOtpSignup.email}
+                  </strong>
+                  .
                 </p>
               </div>
 
               {errorMsg && (
-                <div className="p-3.5 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-sm text-[#9E2F2F]">
+                <div className="p-3.5 rounded-xl bg-[#FDF2EC] dark:bg-[#331B1B] border border-[#EBC6BA] dark:border-[#6B3232] text-sm text-[#9E2F2F] dark:text-[#FCA5A5]">
                   {errorMsg}
                 </div>
               )}
 
               {infoMsg && (
-                <div className="p-3.5 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] text-sm text-[#1B4332] flex items-start gap-2.5">
+                <div className="p-3.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] border border-[#C7DBC9] dark:border-[#2E4D3E] text-sm text-[#1B4332] dark:text-[#82C9A5] flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
                   <span>{infoMsg}</span>
                 </div>
@@ -881,10 +886,10 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               <form onSubmit={handleVerifySignupOtp} className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-medium text-[#34443A]">
+                    <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE]">
                       6-Digit Email OTP Code
                     </label>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-[#5A6A60]">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-[#5A6A60] dark:text-[#9CB0A4]">
                       <Clock className="w-3 h-3" />
                       Valid for 5 minutes
                     </span>
@@ -897,14 +902,14 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="••••••"
-                    className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#DCE0D8] text-center font-mono text-xl tracking-[0.4em] text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                    className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-[#FAF9F6] dark:bg-[#0F1713] border border-[#DCE0D8] dark:border-[#2B3B32] text-center font-mono text-xl tracking-[0.4em] text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading || otpCode.length !== 6}
-                  className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                   {loading ? 'Verifying & creating account...' : 'Verify & Create Account'}
@@ -912,13 +917,13 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                 </button>
               </form>
 
-              <div className="pt-3 border-t border-[#ECEEE8] flex items-center justify-between gap-2 text-xs">
-                <span className="text-[#5A6A60]">Didn’t receive the email?</span>
+              <div className="pt-3 border-t border-[#ECEEE8] dark:border-[#24322B] flex items-center justify-between gap-2 text-xs">
+                <span className="text-[#5A6A60] dark:text-[#9CB0A4]">Didn’t receive the email?</span>
                 <button
                   type="button"
                   disabled={resendSeconds > 0 || loading}
                   onClick={() => void handleResendSignupOtp()}
-                  className="font-medium text-[#1B4332] hover:underline disabled:text-[#6B7A70] disabled:no-underline cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
+                  className="font-medium text-[#1B4332] dark:text-[#82C9A5] hover:underline disabled:text-[#6B7A70] dark:disabled:text-[#6E8277] disabled:no-underline cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
                 >
                   {resendSeconds > 0 ? `Resend OTP in ${resendSeconds}s` : 'Resend OTP'}
                 </button>
@@ -927,12 +932,12 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="font-display text-2xl font-semibold text-[#1A2820] mb-1">
+                <h2 className="font-display text-2xl font-semibold text-[#1A2820] dark:text-[#EBF2ED] mb-1">
                   {mode === 'login' && 'Welcome back to Zero Crumbs'}
                   {mode === 'signup' && 'Create your Zero Crumbs account'}
                   {mode === 'reset' && 'Reset your password'}
                 </h2>
-                <p className="text-sm text-[#5A6A60]">
+                <p className="text-sm text-[#5A6A60] dark:text-[#9CB0A4]">
                   {mode === 'login' &&
                     'Access your private food inventory, expiry alerts, and charity listings.'}
                   {mode === 'signup' &&
@@ -942,7 +947,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               </div>
 
               {mode !== 'reset' && (
-                <div className="grid grid-cols-2 gap-1 p-1 bg-[#EFEFE9] rounded-xl mb-5">
+                <div className="grid grid-cols-2 gap-1 p-1 bg-[#EFEFE9] dark:bg-[#121B16] rounded-xl mb-5">
                   <button
                     type="button"
                     onClick={() => {
@@ -951,8 +956,8 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                     }}
                     className={`min-h-[42px] py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                       mode === 'login'
-                        ? 'bg-white text-[#1A2820] shadow-xs'
-                        : 'text-[#5A6A60] hover:text-[#1A2820]'
+                        ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+                        : 'text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED]'
                     }`}
                   >
                     Sign In
@@ -965,8 +970,8 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                     }}
                     className={`min-h-[42px] py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                       mode === 'signup'
-                        ? 'bg-white text-[#1A2820] shadow-xs'
-                        : 'text-[#5A6A60] hover:text-[#1A2820]'
+                        ? 'bg-white dark:bg-[#21352B] text-[#1A2820] dark:text-[#EBF2ED] shadow-xs'
+                        : 'text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED]'
                     }`}
                   >
                     Create Account
@@ -975,20 +980,20 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               )}
 
               {errorMsg && (
-                <div className="mb-5 p-3.5 rounded-xl bg-[#FDF2EC] border border-[#EBC6BA] text-sm text-[#9E2F2F]">
+                <div className="mb-5 p-3.5 rounded-xl bg-[#FDF2EC] dark:bg-[#331B1B] border border-[#EBC6BA] dark:border-[#6B3232] text-sm text-[#9E2F2F] dark:text-[#FCA5A5]">
                   {errorMsg}
                 </div>
               )}
 
               {infoMsg && (
-                <div className="mb-5 p-3.5 rounded-xl bg-[#EEF3EC] border border-[#C7DBC9] text-sm text-[#1B4332] flex items-start gap-2.5">
+                <div className="mb-5 p-3.5 rounded-xl bg-[#EEF3EC] dark:bg-[#1B3328] border border-[#C7DBC9] dark:border-[#2E4D3E] text-sm text-[#1B4332] dark:text-[#82C9A5] flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
                   <span>{infoMsg}</span>
                 </div>
               )}
 
               {needsConsoleEmailSetup && (
-                <div className="mb-5 p-4 rounded-xl bg-[#FBF4E9] border border-[#E7D4B5] text-xs text-[#614721] space-y-1.5">
+                <div className="mb-5 p-4 rounded-xl bg-[#FBF4E9] dark:bg-[#2C2214] border border-[#E7D4B5] dark:border-[#5C4421] text-xs text-[#614721] dark:text-[#FCD34D] space-y-1.5">
                   <p className="font-semibold">How to enable Email/Password Sign-In:</p>
                   <p>
                     1. Open your Firebase Console → <strong>Authentication</strong> →{' '}
@@ -1002,7 +1007,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               )}
 
               {needsEmailDeliverySetup && (
-                <div className="mb-5 p-4 rounded-xl bg-[#FBF4E9] border border-[#E7D4B5] text-xs text-[#614721] space-y-1.5">
+                <div className="mb-5 p-4 rounded-xl bg-[#FBF4E9] dark:bg-[#2C2214] border border-[#E7D4B5] dark:border-[#5C4421] text-xs text-[#614721] dark:text-[#FCD34D] space-y-1.5">
                   <p className="font-semibold">Free Email OTP Delivery Setup Required:</p>
                   <p>
                     Configure <code className="font-mono">APPS_SCRIPT_EMAIL_URL</code> (free Google
@@ -1018,7 +1023,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               {mode === 'login' && (
                 <form onSubmit={handleEmailLogin} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#34443A] mb-1.5">
+                    <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1.5">
                       Email or Username
                     </label>
                     <input
@@ -1027,20 +1032,22 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                       onChange={(e) => setIdentifier(e.target.value)}
                       placeholder="you@example.com or username"
                       autoComplete="username"
-                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                     />
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-medium text-[#34443A]">Password</label>
+                      <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE]">
+                        Password
+                      </label>
                       <button
                         type="button"
                         onClick={() => {
                           setMode('reset');
                           resetNotices();
                         }}
-                        className="text-xs font-medium text-[#355E4B] hover:underline cursor-pointer"
+                        className="text-xs font-medium text-[#355E4B] dark:text-[#82C9A5] hover:underline cursor-pointer"
                       >
                         Forgot password?
                       </button>
@@ -1052,12 +1059,12 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter your password"
                         autoComplete="current-password"
-                        className="w-full min-h-[44px] px-3.5 py-2.5 pr-11 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 pr-11 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#6B7A70] hover:text-[#1A2820] cursor-pointer"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#6B7A70] dark:text-[#90A498] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] cursor-pointer"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1068,7 +1075,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {loading ? 'Signing in...' : 'Sign In'}
@@ -1082,7 +1089,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                 <form onSubmit={handleSignupStart} className="space-y-3.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-xs font-medium text-[#34443A] mb-1">
+                      <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                         Full Name *
                       </label>
                       <input
@@ -1090,11 +1097,11 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="Maya Lin"
-                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-[#34443A] mb-1">
+                      <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                         Username *
                       </label>
                       <input
@@ -1102,13 +1109,13 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="mayalin"
-                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#34443A] mb-1">
+                    <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                       Email Address *
                     </label>
                     <input
@@ -1117,13 +1124,13 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="maya@example.com"
                       autoComplete="email"
-                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-xs font-medium text-[#34443A] mb-1">
+                      <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                         Password *
                       </label>
                       <input
@@ -1132,11 +1139,11 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Min. 6 characters"
                         autoComplete="new-password"
-                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-[#34443A] mb-1">
+                      <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1">
                         Confirm Password *
                       </label>
                       <input
@@ -1145,17 +1152,17 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Repeat password"
                         autoComplete="new-password"
-                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                        className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                       />
                     </div>
                   </div>
 
-                  <label className="inline-flex items-center gap-2 text-xs text-[#5A6A60] cursor-pointer min-h-[32px]">
+                  <label className="inline-flex items-center gap-2 text-xs text-[#5A6A60] dark:text-[#9CB0A4] cursor-pointer min-h-[32px]">
                     <input
                       type="checkbox"
                       checked={showPassword}
                       onChange={(e) => setShowPassword(e.target.checked)}
-                      className="rounded border-[#DCE0D8] text-[#1B4332]"
+                      className="rounded border-[#DCE0D8] dark:border-[#2B3B32] text-[#1B4332]"
                     />
                     Show passwords
                   </label>
@@ -1163,7 +1170,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {loading ? 'Sending Verification OTP...' : 'Send 6-Digit Email OTP'}
@@ -1175,7 +1182,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               {mode === 'reset' && (
                 <form onSubmit={handlePasswordReset} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#34443A] mb-1.5">
+                    <label className="block text-xs font-medium text-[#34443A] dark:text-[#B8C7BE] mb-1.5">
                       Account Email Address
                     </label>
                     <input
@@ -1183,14 +1190,14 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
-                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE0D8] text-sm text-[#1A2820] focus:outline-none focus:border-[#1B4332]"
+                      className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm text-[#1A2820] dark:text-[#EBF2ED] focus:outline-none focus:border-[#1B4332] dark:focus:border-[#52B788]"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] text-white text-sm font-medium hover:bg-[#143325] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1B4332] dark:bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#143325] dark:hover:bg-[#245740] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {loading ? 'Sending reset link...' : 'Send Password Reset Email'}
@@ -1202,7 +1209,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                       setMode('login');
                       resetNotices();
                     }}
-                    className="w-full min-h-[40px] py-2 text-sm text-[#5A6A60] hover:text-[#1A2820] transition-colors cursor-pointer"
+                    className="w-full min-h-[40px] py-2 text-sm text-[#5A6A60] dark:text-[#9CB0A4] hover:text-[#1A2820] dark:hover:text-[#EBF2ED] transition-colors cursor-pointer"
                   >
                     Back to Sign In
                   </button>
@@ -1212,16 +1219,18 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
               {mode !== 'reset' && (
                 <>
                   <div className="flex items-center gap-3 my-6">
-                    <div className="h-px flex-1 bg-[#E5E7E2]" />
-                    <span className="text-xs text-[#6B7A70]">or continue instantly</span>
-                    <div className="h-px flex-1 bg-[#E5E7E2]" />
+                    <div className="h-px flex-1 bg-[#E5E7E2] dark:bg-[#27362E]" />
+                    <span className="text-xs text-[#6B7A70] dark:text-[#869B8F]">
+                      or continue instantly
+                    </span>
+                    <div className="h-px flex-1 bg-[#E5E7E2] dark:bg-[#27362E]" />
                   </div>
 
                   <button
                     type="button"
                     disabled={loading}
                     onClick={handleGoogleSignIn}
-                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-white border border-[#DCE0D8] text-sm font-medium text-[#1A2820] hover:bg-[#F4F5F2] transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60"
+                    className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-white dark:bg-[#17211C] border border-[#DCE0D8] dark:border-[#2B3B32] text-sm font-medium text-[#1A2820] dark:text-[#EBF2ED] hover:bg-[#F4F5F2] dark:hover:bg-[#1F2D25] transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
                       <path
@@ -1248,7 +1257,7 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
             </>
           )}
 
-          <p className="mt-7 text-center text-xs text-[#6B7A70]">
+          <p className="mt-7 text-center text-xs text-[#6B7A70] dark:text-[#869B8F]">
             Zero Crumbs — Private, cloud-synced household food management.
           </p>
         </div>

@@ -33,6 +33,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'microphone=*');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  const isAllowedOrigin =
+    Boolean(origin) &&
+    (/^https:\/\/[a-z0-9.-]+\.(run\.app|aistudio\.google\.com|web\.app|firebaseapp\.com)(:\d+)?$/i.test(
+      origin
+    ) ||
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin));
+
+  if (isAllowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Gmail-Access-Token'
+    );
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  next();
+});
+
 app.use(express.json({ limit: '6mb' }));
 
 const emailOtpService = new EmailOtpService();
@@ -413,11 +445,19 @@ app.post('/api/auth/confirm-verified', async (req, res) => {
 });
 
 // Check Gemini AI integration status for authenticated users
-app.get('/api/ai/status', requireAuth, (_req, res) => {
+app.get('/api/ai/status', requireAuth, (req, res) => {
+  const configured = isGeminiKeyConfigured();
+  const forwardedProto =
+    typeof req.headers['x-forwarded-proto'] === 'string'
+      ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+      : req.protocol;
   res.json({
-    configured: isGeminiKeyConfigured(),
+    configured,
     model: 'gemini-4-hydrogen',
+    transcribeModel: 'gemini-3.5-transcribe',
     liveModel: 'gemini-3.8-live',
+    environment: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+    protocol: forwardedProto,
   });
 });
 
@@ -1693,8 +1733,25 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(__dirname, 'dist');
-    app.use(express.static(distDir));
+    const assetsDir = path.join(distDir, 'assets');
+    if (fs.existsSync(assetsDir)) {
+      app.use('/assets', express.static(assetsDir, { maxAge: '1y', immutable: true }));
+    }
+    app.use(
+      express.static(distDir, {
+        index: false,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          }
+        },
+      })
+    );
+    app.all('/api/*', (_req, res) => {
+      res.status(404).json({ error: 'API endpoint not found.' });
+    });
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
@@ -1703,7 +1760,9 @@ async function startServer() {
   attachLiveVoiceWebSocket(server);
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(`Zero Crumbs server running on http://0.0.0.0:${port}`);
+    console.log(
+      `Zero Crumbs server running on http://0.0.0.0:${port} (env=${isProd ? 'production' : 'development'}, geminiConfigured=${isGeminiKeyConfigured()})`
+    );
   });
 }
 

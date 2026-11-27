@@ -9,6 +9,12 @@ export type VoiceStage =
 
 export type VoiceRecognitionMode = 'browser-speech' | 'server-transcribe';
 
+export type MicrophonePermissionStatus =
+  | 'allowed'
+  | 'blocked'
+  | 'not_requested'
+  | 'unsupported';
+
 export interface VoiceSupportInfo {
   secureContext: boolean;
   microphoneApi: boolean;
@@ -18,6 +24,19 @@ export interface VoiceSupportInfo {
   supported: boolean;
   preferredMode: VoiceRecognitionMode | null;
   unsupportedReason?: string;
+}
+
+export interface VoiceEnvironmentDiagnostics {
+  isSecureContext: boolean;
+  origin: string;
+  protocol: string;
+  inIframe: boolean;
+  mediaDevicesAvailable: boolean;
+  permissionsApiAvailable: boolean;
+  speechRecognitionAvailable: boolean;
+  mediaRecorderAvailable: boolean;
+  speechSynthesisAvailable: boolean;
+  userAgent: string;
 }
 
 interface SpeechRecognitionAlternativeLike {
@@ -63,6 +82,67 @@ export interface SpeechRecognitionInstanceLike extends EventTarget {
 }
 
 export type SpeechRecognitionConstructorLike = new () => SpeechRecognitionInstanceLike;
+
+export function logVoiceDiagnostic(
+  stage: string,
+  details?: Record<string, unknown>,
+  level: 'info' | 'warn' | 'error' = 'info'
+): void {
+  if (typeof console === 'undefined') return;
+  const payload = {
+    ts: new Date().toISOString(),
+    origin: typeof window !== 'undefined' ? window.location.origin : 'ssr',
+    secureContext: typeof window !== 'undefined' ? window.isSecureContext : false,
+    ...details,
+  };
+  const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
+  fn(`[ZeroCrumbs Voice] ${stage}`, payload);
+}
+
+export function getVoiceEnvironmentDiagnostics(): VoiceEnvironmentDiagnostics {
+  if (typeof window === 'undefined') {
+    return {
+      isSecureContext: false,
+      origin: '',
+      protocol: '',
+      inIframe: false,
+      mediaDevicesAvailable: false,
+      permissionsApiAvailable: false,
+      speechRecognitionAvailable: false,
+      mediaRecorderAvailable: false,
+      speechSynthesisAvailable: false,
+      userAgent: '',
+    };
+  }
+
+  let inIframe = false;
+  try {
+    inIframe = window.self !== window.top;
+  } catch {
+    inIframe = true;
+  }
+
+  return {
+    isSecureContext: Boolean(window.isSecureContext),
+    origin: window.location.origin,
+    protocol: window.location.protocol,
+    inIframe,
+    mediaDevicesAvailable: Boolean(
+      typeof navigator !== 'undefined' &&
+        navigator.mediaDevices &&
+        typeof navigator.mediaDevices.getUserMedia === 'function'
+    ),
+    permissionsApiAvailable: Boolean(
+      typeof navigator !== 'undefined' &&
+        navigator.permissions &&
+        typeof navigator.permissions.query === 'function'
+    ),
+    speechRecognitionAvailable: Boolean(getSpeechRecognitionConstructor()),
+    mediaRecorderAvailable: typeof MediaRecorder !== 'undefined',
+    speechSynthesisAvailable: hasSpeechSynthesisSupport(),
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+  };
+}
 
 export function getSpeechRecognitionConstructor(): SpeechRecognitionConstructorLike | null {
   if (typeof window === 'undefined') return null;
@@ -158,6 +238,112 @@ export function getVoiceSupportInfo(): VoiceSupportInfo {
   };
 }
 
+export async function queryMicrophonePermissionStatus(options?: {
+  sessionGranted?: boolean;
+  sessionBlocked?: boolean;
+}): Promise<{
+  status: MicrophonePermissionStatus;
+  source: 'permissions-api' | 'session-fallback' | 'unsupported';
+}> {
+  if (typeof window === 'undefined') {
+    return { status: 'unsupported', source: 'unsupported' };
+  }
+
+  const hasMediaDevices = Boolean(
+    typeof navigator !== 'undefined' &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function'
+  );
+
+  if (!window.isSecureContext || !hasMediaDevices) {
+    return { status: 'unsupported', source: 'unsupported' };
+  }
+
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.permissions &&
+    typeof navigator.permissions.query === 'function'
+  ) {
+    try {
+      const perm = await navigator.permissions.query({
+        name: 'microphone' as PermissionName,
+      });
+      if (perm.state === 'granted') {
+        return { status: 'allowed', source: 'permissions-api' };
+      }
+      if (perm.state === 'denied') {
+        return { status: 'blocked', source: 'permissions-api' };
+      }
+      return { status: 'not_requested', source: 'permissions-api' };
+    } catch {
+      // Safari / browsers that do not support permissions.query({ name: 'microphone' })
+    }
+  }
+
+  if (options?.sessionBlocked) {
+    return { status: 'blocked', source: 'session-fallback' };
+  }
+  if (options?.sessionGranted) {
+    return { status: 'allowed', source: 'session-fallback' };
+  }
+  return { status: 'not_requested', source: 'session-fallback' };
+}
+
+export function subscribeMicrophonePermissionChange(
+  onChange: (status: MicrophonePermissionStatus) => void
+): () => void {
+  if (
+    typeof window === 'undefined' ||
+    !window.isSecureContext ||
+    typeof navigator === 'undefined' ||
+    !navigator.permissions ||
+    typeof navigator.permissions.query !== 'function'
+  ) {
+    return () => {};
+  }
+
+  let active = true;
+  let permStatus: PermissionStatus | null = null;
+
+  const mapState = (state: PermissionState): MicrophonePermissionStatus => {
+    if (state === 'granted') return 'allowed';
+    if (state === 'denied') return 'blocked';
+    return 'not_requested';
+  };
+
+  const handleChange = () => {
+    if (!active || !permStatus) return;
+    onChange(mapState(permStatus.state));
+  };
+
+  void navigator.permissions
+    .query({ name: 'microphone' as PermissionName })
+    .then((result) => {
+      if (!active) return;
+      permStatus = result;
+      onChange(mapState(result.state));
+      if (typeof result.addEventListener === 'function') {
+        result.addEventListener('change', handleChange);
+      } else {
+        result.onchange = handleChange;
+      }
+    })
+    .catch(() => {
+      // Ignore browsers that reject 'microphone' permission query
+    });
+
+  return () => {
+    active = false;
+    if (permStatus) {
+      if (typeof permStatus.removeEventListener === 'function') {
+        permStatus.removeEventListener('change', handleChange);
+      } else if (permStatus.onchange === handleChange) {
+        permStatus.onchange = null;
+      }
+    }
+  };
+}
+
 export function isMobileOrTouchBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -166,10 +352,16 @@ export function isMobileOrTouchBrowser(): boolean {
 export function unlockSpeechSynthesis(): void {
   if (!hasSpeechSynthesisSupport()) return;
   try {
-    window.speechSynthesis.cancel();
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+    }
+    if (synth.paused) {
+      synth.resume();
+    }
     const primer = new SpeechSynthesisUtterance('');
     primer.volume = 0;
-    window.speechSynthesis.speak(primer);
+    synth.speak(primer);
   } catch {
     // Ignore browser speech unlock errors
   }
@@ -255,9 +447,33 @@ export function speakTextAloud(params: {
   }
 
   let cancelled = false;
+  let startDelayTimer: number | null = null;
+  let chunkWatchdogTimer: number | null = null;
   const synth = window.speechSynthesis;
+
+  const clearTimers = () => {
+    if (startDelayTimer !== null) {
+      window.clearTimeout(startDelayTimer);
+      startDelayTimer = null;
+    }
+    if (chunkWatchdogTimer !== null) {
+      window.clearTimeout(chunkWatchdogTimer);
+      chunkWatchdogTimer = null;
+    }
+  };
+
+  const wasBusy = synth.speaking || synth.pending;
+  if (wasBusy) {
+    try {
+      synth.cancel();
+    } catch {
+      // Ignore
+    }
+  }
   try {
-    synth.cancel();
+    if (synth.paused) {
+      synth.resume();
+    }
   } catch {
     // Ignore
   }
@@ -274,16 +490,30 @@ export function speakTextAloud(params: {
 
   const speakNext = () => {
     if (cancelled) return;
+    clearTimers();
     if (index >= chunks.length) {
       params.onEnd?.();
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+    const chunkText = chunks[index];
+    const utterance = new SpeechSynthesisUtterance(chunkText);
     if (chosenVoice) utterance.voice = chosenVoice;
     utterance.lang = chosenVoice?.lang || navigator.language || 'en-US';
     utterance.rate = params.rate ?? 1;
     utterance.pitch = 1;
+
+    let finishedChunk = false;
+    const advanceChunk = () => {
+      if (finishedChunk || cancelled) return;
+      finishedChunk = true;
+      if (chunkWatchdogTimer !== null) {
+        window.clearTimeout(chunkWatchdogTimer);
+        chunkWatchdogTimer = null;
+      }
+      index += 1;
+      speakNext();
+    };
 
     utterance.onstart = () => {
       if (!started && !cancelled) {
@@ -293,9 +523,7 @@ export function speakTextAloud(params: {
     };
 
     utterance.onend = () => {
-      if (cancelled) return;
-      index += 1;
-      speakNext();
+      advanceChunk();
     };
 
     utterance.onerror = (ev) => {
@@ -303,14 +531,34 @@ export function speakTextAloud(params: {
       if (ev.error === 'interrupted' || ev.error === 'canceled') {
         return;
       }
+      logVoiceDiagnostic('speech_synthesis_error', { error: ev.error }, 'warn');
       cancelled = true;
+      clearTimers();
       params.onError?.(
         ev.error === 'not-allowed'
-          ? 'Browser audio autoplay blocked speech playback. Tap the speaker icon or Retry Voice to hear replies.'
+          ? 'Browser audio autoplay blocked speech playback. Tap Listen on the reply or Retry Voice to hear replies.'
           : 'Could not play speech audio in this browser; the written response is shown above.'
       );
       params.onEnd?.();
     };
+
+    // Guard against Chromium occasionally dropping utterance.onend so voice never hangs in 'speaking'
+    const maxChunkMs = Math.max(7000, Math.min(28000, chunkText.length * 145));
+    chunkWatchdogTimer = window.setTimeout(() => {
+      if (!finishedChunk && !cancelled) {
+        logVoiceDiagnostic(
+          'speech_synthesis_watchdog_advance',
+          { chunkIndex: index, chunkLength: chunkText.length },
+          'warn'
+        );
+        try {
+          synth.cancel();
+        } catch {
+          // Ignore
+        }
+        advanceChunk();
+      }
+    }, maxChunkMs);
 
     if (!started && index === 0) {
       started = true;
@@ -318,18 +566,33 @@ export function speakTextAloud(params: {
     }
 
     try {
+      if (synth.paused) {
+        synth.resume();
+      }
       synth.speak(utterance);
-    } catch {
+    } catch (err) {
+      logVoiceDiagnostic(
+        'speech_synthesis_exception',
+        { message: err instanceof Error ? err.message : String(err) },
+        'error'
+      );
       cancelled = true;
+      clearTimers();
       params.onError?.('Speech playback failed in this browser.');
       params.onEnd?.();
     }
   };
 
-  speakNext();
+  // Chromium requires a brief delay after cancel() before speak() so the new utterance isn't dropped
+  if (wasBusy) {
+    startDelayTimer = window.setTimeout(speakNext, 60);
+  } else {
+    speakNext();
+  }
 
   return () => {
     cancelled = true;
+    clearTimers();
     try {
       synth.cancel();
     } catch {
@@ -351,10 +614,10 @@ export function formatMicrophonePermissionError(err: unknown): FriendlyMicPermis
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
       return {
         code: 'permission_denied',
-        message: 'Microphone access was denied.',
+        message: 'Microphone access was denied or blocked for this site.',
         howToEnable: isMobile
-          ? 'Tap the browser site settings/lock icon (or device Settings > Browser > Microphone), allow Microphone for this site, and tap Retry Voice. If inside an embedded preview, open the app in a new tab.'
-          : 'Click the lock or site-info icon in your browser address bar, set Microphone to Allow, and click Retry Voice. If viewing inside an embedded frame, open Zero Crumbs in a new tab.',
+          ? 'Browser permissions must be changed in site settings if previously blocked: tap the lock/site-settings icon in your browser address bar -> Permissions -> Microphone -> Allow, then tap Retry Voice.'
+          : 'Browser permissions must be changed in site settings if previously blocked: click the tune/lock icon to the left of the URL -> Site settings -> set Microphone to Allow, reload or tap Retry Voice. If inside an embedded frame, open Zero Crumbs in a new tab.',
       };
     }
     if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
@@ -394,13 +657,32 @@ export function formatMicrophonePermissionError(err: unknown): FriendlyMicPermis
 }
 
 export async function requestMicrophoneStream(): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
+  if (
+    typeof navigator === 'undefined' ||
+    !navigator.mediaDevices ||
+    typeof navigator.mediaDevices.getUserMedia !== 'function'
+  ) {
+    throw new DOMException('Microphone capture API is unavailable in this browser.', 'NotSupportedError');
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (err) {
+    if (
+      err instanceof DOMException &&
+      (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError')
+    ) {
+      logVoiceDiagnostic('getUserMedia_constraint_fallback', { errorName: err.name }, 'warn');
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    throw err;
+  }
 }
 
 export function stopMediaStream(stream: MediaStream | null): void {

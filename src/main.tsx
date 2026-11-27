@@ -1,6 +1,9 @@
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { initializeTheme } from './utils/theme.ts';
+
+initializeTheme();
 
 // Case A Tier 1: Global Google Maps Platform quota / auth error detector
 if (typeof window !== 'undefined') {
