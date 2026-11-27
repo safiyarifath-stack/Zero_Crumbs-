@@ -1,15 +1,31 @@
 import express from 'express';
+import http from 'http';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import { WebSocketServer, WebSocket } from 'ws';
+import {
+  GoogleGenAI,
+  Modality,
+  ThinkingLevel,
+  type LiveServerMessage,
+  type Session,
+} from '@google/genai';
 import {
   defaultSendEmail,
   EmailOtpService,
   getEmailDeliveryStatus,
   type OtpPurpose,
 } from './server/emailOtpService.ts';
+import {
+  buildZeroCrumbsSystemInstruction,
+  createZeroCrumbsToolExecutor,
+  ZERO_CRUMBS_TOOL_DECLARATIONS,
+  type DonationSnapshotItem,
+  type InventorySnapshotItem,
+  type UserProfileSnapshot,
+} from './server/zeroCrumbsAi.ts';
 
 dotenv.config();
 
@@ -17,7 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '6mb' }));
 
 const emailOtpService = new EmailOtpService();
 const verifiedOtpUids = new Set<string>();
@@ -48,13 +64,9 @@ interface VerifiedUser {
   idToken: string;
 }
 
-async function verifyFirebaseBearerToken(req: express.Request): Promise<VerifiedUser | null> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
-  const idToken = authHeader.slice('Bearer '.length).trim();
-  if (!idToken || !firebaseApiKey) {
+async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser | null> {
+  const trimmed = idToken.trim();
+  if (!trimmed || !firebaseApiKey) {
     return null;
   }
 
@@ -64,7 +76,7 @@ async function verifyFirebaseBearerToken(req: express.Request): Promise<Verified
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken: trimmed }),
       }
     );
     if (!resp.ok) {
@@ -85,11 +97,19 @@ async function verifyFirebaseBearerToken(req: express.Request): Promise<Verified
       uid: u.localId,
       email: u.email,
       emailVerified: Boolean(u.emailVerified),
-      idToken,
+      idToken: trimmed,
     };
   } catch {
     return null;
   }
+}
+
+async function verifyFirebaseBearerToken(req: express.Request): Promise<VerifiedUser | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return verifyFirebaseIdToken(authHeader.slice('Bearer '.length));
 }
 
 async function isEmailOtpVerifiedInFirestore(uid: string, idToken: string): Promise<boolean> {
@@ -116,6 +136,14 @@ async function isEmailOtpVerifiedInFirestore(uid: string, idToken: string): Prom
   }
 }
 
+async function isUserOtpVerified(user: VerifiedUser): Promise<boolean> {
+  return (
+    user.emailVerified ||
+    verifiedOtpUids.has(user.uid) ||
+    (await isEmailOtpVerifiedInFirestore(user.uid, user.idToken))
+  );
+}
+
 async function requireAuth(
   req: express.Request,
   res: express.Response,
@@ -126,10 +154,7 @@ async function requireAuth(
     res.status(401).json({ error: 'Authentication required. Please sign in to continue.' });
     return;
   }
-  const otpVerified =
-    user.emailVerified ||
-    verifiedOtpUids.has(user.uid) ||
-    (await isEmailOtpVerifiedInFirestore(user.uid, user.idToken));
+  const otpVerified = await isUserOtpVerified(user);
 
   if (!otpVerified) {
     res.status(403).json({
@@ -154,6 +179,22 @@ function getGeminiClient() {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+function getGeminiLiveClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!isGeminiKeyConfigured() || !apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured in environment secrets.');
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      apiVersion: 'v1beta',
       headers: {
         'User-Agent': 'aistudio-build',
       },
@@ -376,6 +417,7 @@ app.get('/api/ai/status', requireAuth, (_req, res) => {
   res.json({
     configured: isGeminiKeyConfigured(),
     model: 'gemini-4-hydrogen',
+    liveModel: 'gemini-3.8-live',
   });
 });
 
@@ -448,55 +490,6 @@ app.post('/api/reminders/send-email', requireAuth, async (req, res) => {
   }
 });
 
-interface InventorySnapshotItem {
-  id: string;
-  name: string;
-  category: string;
-  quantity: number;
-  initialQuantity: number;
-  unit: string;
-  location: string;
-  expiryDate: string;
-  status: string;
-  notes?: string;
-}
-
-interface DonationSnapshotItem {
-  id: string;
-  foodName: string;
-  quantity: number;
-  unit: string;
-  category: string;
-  expiryDate: string;
-  status: string;
-  pickupLocation: string;
-  charityPartner?: string;
-}
-
-interface PendingActionProposal {
-  actionId: string;
-  type:
-    | 'add_food'
-    | 'use_food'
-    | 'increase_food'
-    | 'update_food'
-    | 'delete_food'
-    | 'create_donation'
-    | 'update_donation_status';
-  title: string;
-  description: string;
-  requiresConfirmation: boolean;
-  payload: Record<string, unknown>;
-}
-
-function daysBetween(expiryDate: string, todayStr: string): number {
-  const [ey, em, ed] = expiryDate.split('-').map(Number);
-  const [ty, tm, td] = todayStr.split('-').map(Number);
-  const expUtc = Date.UTC(ey, (em || 1) - 1, ed || 1);
-  const todayUtc = Date.UTC(ty, (tm || 1) - 1, td || 1);
-  return Math.round((expUtc - todayUtc) / (1000 * 60 * 60 * 24));
-}
-
 // Zero Crumbs AI Agent endpoint with Gemini function calling
 app.post('/api/ai/chat', requireAuth, async (req, res) => {
   try {
@@ -512,7 +505,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       history?: Array<{ role: 'user' | 'assistant'; text: string }>;
       inventory?: InventorySnapshotItem[];
       donations?: DonationSnapshotItem[];
-      profile?: { fullName?: string; reminderDaysBefore?: number; defaultLocation?: string };
+      profile?: UserProfileSnapshot;
       currentDate?: string;
     };
 
@@ -531,504 +524,20 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     const ai = getGeminiClient();
 
-    const toolDeclarations = [
-      {
-        name: 'search_inventory',
-        description:
-          'Search and inspect the authenticated user household food inventory by optional name query, storage location, or status.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            query: { type: Type.STRING, description: 'Partial name or category keyword to match.' },
-            location: {
-              type: Type.STRING,
-              description: 'Optional storage location: Fridge, Freezer, or Pantry.',
-            },
-            status: {
-              type: Type.STRING,
-              description: 'Optional status filter: active, consumed, wasted, donated, or all.',
-            },
-          },
-        },
-      },
-      {
-        name: 'get_expiring_summary',
-        description:
-          'Check expiry dates across active inventory and return expired, expiring today, and soon-to-expire items.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            daysThreshold: {
-              type: Type.NUMBER,
-              description: 'Days window for soon-to-expire items (default 3).',
-            },
-          },
-        },
-      },
-      {
-        name: 'get_waste_and_consumption_insights',
-        description:
-          'Analyze consumed, wasted, donated, and active food patterns to recommend shopping lists and waste-reduction tips.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            focusArea: {
-              type: Type.STRING,
-              description: 'Optional focus area: all, waste, shopping, or donations.',
-            },
-          },
-        },
-      },
-      {
-        name: 'get_donation_summary',
-        description: 'Inspect current charity donation listings and statuses.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            statusFilter: {
-              type: Type.STRING,
-              description:
-                'Optional status filter: all, Available, Requested, Approved, Collected, Donated, or Cancelled.',
-            },
-          },
-        },
-      },
-      {
-        name: 'propose_add_food',
-        description:
-          'Prepare an action confirmation card to add a new food item to the user inventory. Does not write until user confirms.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            quantity: { type: Type.NUMBER },
-            unit: {
-              type: Type.STRING,
-              description: 'One of: g, kg, ml, l, pcs, packs, cups, tbsp, bottles, cans',
-            },
-            location: { type: Type.STRING, description: 'One of: Fridge, Freezer, Pantry' },
-            expiryDate: { type: Type.STRING, description: 'YYYY-MM-DD' },
-            category: {
-              type: Type.STRING,
-              description:
-                'One of: Produce, Dairy & Eggs, Bakery, Grains & Pantry, Proteins, Prepared Meals, Beverages, Frozen, Other',
-            },
-            notes: { type: Type.STRING },
-          },
-          required: ['name', 'quantity', 'unit', 'location', 'expiryDate'],
-        },
-      },
-      {
-        name: 'propose_use_food',
-        description:
-          'Prepare an action confirmation card to reduce remaining quantity of an existing food item or mark it completely consumed.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            foodId: { type: Type.STRING },
-            foodName: { type: Type.STRING },
-            amountUsed: { type: Type.NUMBER },
-            unit: {
-              type: Type.STRING,
-              description: 'One of: g, kg, ml, l, pcs, packs, cups, tbsp, bottles, cans',
-            },
-            markCompletelyUsed: { type: Type.BOOLEAN },
-          },
-          required: ['foodId', 'foodName', 'amountUsed', 'unit'],
-        },
-      },
-      {
-        name: 'propose_increase_food',
-        description:
-          'Prepare an action confirmation card to increase the quantity of an existing food item.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            foodId: { type: Type.STRING },
-            foodName: { type: Type.STRING },
-            amountAdded: { type: Type.NUMBER },
-            unit: { type: Type.STRING },
-          },
-          required: ['foodId', 'foodName', 'amountAdded', 'unit'],
-        },
-      },
-      {
-        name: 'propose_update_food',
-        description:
-          'Prepare an action confirmation card to edit details (name, location, expiryDate, category, notes) of an existing food item.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            foodId: { type: Type.STRING },
-            foodName: { type: Type.STRING },
-            newName: { type: Type.STRING },
-            location: { type: Type.STRING },
-            expiryDate: { type: Type.STRING },
-            category: { type: Type.STRING },
-            notes: { type: Type.STRING },
-          },
-          required: ['foodId', 'foodName'],
-        },
-      },
-      {
-        name: 'propose_delete_food',
-        description:
-          'Prepare an action confirmation card to delete a food item from inventory. Always requires explicit user confirmation.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            foodId: { type: Type.STRING },
-            foodName: { type: Type.STRING },
-            reason: { type: Type.STRING },
-          },
-          required: ['foodId', 'foodName'],
-        },
-      },
-      {
-        name: 'propose_create_donation',
-        description:
-          'Prepare an action confirmation card to publish a surplus food donation listing. Strictly forbidden for expired food.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            foodId: { type: Type.STRING, description: 'Existing food ID or standalone' },
-            foodName: { type: Type.STRING },
-            quantity: { type: Type.NUMBER },
-            unit: { type: Type.STRING },
-            category: { type: Type.STRING },
-            expiryDate: { type: Type.STRING, description: 'YYYY-MM-DD, must be today or future' },
-            pickupLocation: { type: Type.STRING },
-            contactInfo: { type: Type.STRING },
-            notes: { type: Type.STRING },
-          },
-          required: ['foodName', 'quantity', 'unit', 'expiryDate'],
-        },
-      },
-      {
-        name: 'propose_update_donation_status',
-        description:
-          'Prepare an action confirmation card to update a donation listing status (Available, Requested, Approved, Collected, Donated, Cancelled).',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            donationId: { type: Type.STRING },
-            foodName: { type: Type.STRING },
-            newStatus: { type: Type.STRING },
-            charityPartner: { type: Type.STRING },
-          },
-          required: ['donationId', 'foodName', 'newStatus'],
-        },
-      },
-    ];
+    const systemInstruction = buildZeroCrumbsSystemInstruction({
+      todayStr,
+      profile,
+      voiceMode: false,
+    });
 
-    const systemInstruction = `You are Zero Crumbs AI, the warm, practical, action-capable food management assistant inside the Zero Crumbs web application.
-Today's date is ${todayStr}.
-User profile: ${JSON.stringify({
-      fullName: profile.fullName || 'Household Member',
-      reminderDaysBefore: profile.reminderDaysBefore ?? 3,
-      defaultLocation: profile.defaultLocation || 'Fridge',
-    })}.
-
-CORE RULES:
-1. Always inspect the user's real inventory or donations via the provided tools before claiming what items exist or proposing edits. Never invent items or claim a database write happened before the user confirms the action card.
-2. NEVER recommend eating or donating EXPIRED food (expiryDate < ${todayStr}). If an item is expired, clearly warn the user and suggest safe disposal or composting, or offer to mark it as wasted/remove it after confirmation.
-3. Whenever the user instructs you to add, update, consume, increase, delete food, or publish/update a donation, call the corresponding \`propose_*\` tool so the UI displays an Action Confirmation Card for the user to approve. Explain clearly what action you prepared and why.
-4. For recipe requests, prioritize active items expiring soon (within 0–3 days) and provide concise, practical cooking steps.
-5. Keep language friendly, clear, and concise (no technical jargon, no JSON dumps in prose).`;
-
-    const pendingActions: PendingActionProposal[] = [];
-
-    function executeLocalTool(name: string, args: Record<string, unknown>): Record<string, unknown> {
-      if (name === 'search_inventory') {
-        const q = typeof args.query === 'string' ? args.query.toLowerCase().trim() : '';
-        const loc = typeof args.location === 'string' ? args.location.toLowerCase().trim() : '';
-        const statusFilter =
-          typeof args.status === 'string' ? args.status.toLowerCase().trim() : 'active';
-
-        const matches = safeInventory
-          .filter((item) => {
-            if (statusFilter !== 'all' && item.status.toLowerCase() !== statusFilter) return false;
-            if (loc && item.location.toLowerCase() !== loc) return false;
-            if (
-              q &&
-              !item.name.toLowerCase().includes(q) &&
-              !item.category.toLowerCase().includes(q)
-            ) {
-              return false;
-            }
-            return true;
-          })
-          .map((item) => ({
-            ...item,
-            daysUntilExpiry: daysBetween(item.expiryDate, todayStr),
-          }))
-          .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-
-        return { count: matches.length, items: matches };
-      }
-
-      if (name === 'get_expiring_summary') {
-        const threshold = typeof args.daysThreshold === 'number' ? args.daysThreshold : 3;
-        const active = safeInventory.filter((i) => i.status === 'active');
-        const expired = active.filter((i) => daysBetween(i.expiryDate, todayStr) < 0);
-        const today = active.filter((i) => daysBetween(i.expiryDate, todayStr) === 0);
-        const soon = active.filter((i) => {
-          const d = daysBetween(i.expiryDate, todayStr);
-          return d >= 1 && d <= threshold;
-        });
-        const fresh = active.filter((i) => daysBetween(i.expiryDate, todayStr) > threshold);
-        return {
-          todayDate: todayStr,
-          expiredCount: expired.length,
-          expiringTodayCount: today.length,
-          expiringSoonCount: soon.length,
-          freshCount: fresh.length,
-          expired,
-          expiringToday: today,
-          expiringSoon: soon,
-        };
-      }
-
-      if (name === 'get_waste_and_consumption_insights') {
-        const consumed = safeInventory.filter((i) => i.status === 'consumed');
-        const wasted = safeInventory.filter((i) => i.status === 'wasted');
-        const donated = safeInventory.filter((i) => i.status === 'donated');
-        const active = safeInventory.filter((i) => i.status === 'active');
-        const lowStock = active.filter(
-          (i) => i.initialQuantity > 0 && i.quantity / i.initialQuantity <= 0.25
-        );
-        return {
-          activeCount: active.length,
-          consumedItems: consumed.map((i) => i.name),
-          wastedItems: wasted.map((i) => ({ name: i.name, category: i.category })),
-          donatedItems: donated.map((i) => i.name),
-          lowStockItems: lowStock.map((i) => ({
-            name: i.name,
-            quantity: i.quantity,
-            unit: i.unit,
-            location: i.location,
-          })),
-          totalDonationsListed: safeDonations.length,
-        };
-      }
-
-      if (name === 'get_donation_summary') {
-        const statusFilter =
-          typeof args.statusFilter === 'string' ? args.statusFilter.toLowerCase().trim() : 'all';
-        const filtered =
-          statusFilter && statusFilter !== 'all'
-            ? safeDonations.filter((d) => d.status.toLowerCase() === statusFilter)
-            : safeDonations;
-        return {
-          count: filtered.length,
-          donations: filtered,
-        };
-      }
-
-      if (name === 'propose_add_food') {
-        const itemName = String(args.name || '').trim();
-        const qty = Number(args.quantity || 1);
-        const unit = String(args.unit || 'pcs');
-        const location = String(args.location || profile.defaultLocation || 'Fridge');
-        const expiryDate = String(args.expiryDate || todayStr);
-        const category = String(args.category || 'Other');
-        const notes = String(args.notes || '');
-
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'add_food',
-          title: `Add ${itemName}`,
-          description: `Add ${qty} ${unit} of ${itemName} to ${location} (expires ${expiryDate}).`,
-          requiresConfirmation: true,
-          payload: { name: itemName, quantity: qty, unit, location, expiryDate, category, notes },
-        });
-        return {
-          queuedForConfirmation: true,
-          actionId,
-          summary: `Prepared action card to add ${qty} ${unit} of ${itemName} to ${location}. Waiting for user confirmation.`,
-        };
-      }
-
-      if (name === 'propose_use_food') {
-        const foodId = String(args.foodId || '');
-        const found = safeInventory.find(
-          (i) => i.id === foodId || i.name.toLowerCase() === String(args.foodName || '').toLowerCase()
-        );
-        if (!found) {
-          return { error: `Could not find "${args.foodName}" in active inventory.` };
-        }
-        const amountUsed = Number(args.amountUsed || 0);
-        const unit = String(args.unit || found.unit);
-        const markCompletelyUsed = Boolean(args.markCompletelyUsed);
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'use_food',
-          title: markCompletelyUsed ? `Finish ${found.name}` : `Use ${amountUsed} ${unit} of ${found.name}`,
-          description: markCompletelyUsed
-            ? `Mark ${found.name} (${found.quantity} ${found.unit}) as completely consumed.`
-            : `Deduct ${amountUsed} ${unit} from ${found.name} (currently ${found.quantity} ${found.unit}).`,
-          requiresConfirmation: true,
-          payload: {
-            foodId: found.id,
-            foodName: found.name,
-            amountUsed,
-            unit,
-            markCompletelyUsed,
-          },
-        });
-        return {
-          queuedForConfirmation: true,
-          actionId,
-          summary: `Prepared confirmation card to update ${found.name}.`,
-        };
-      }
-
-      if (name === 'propose_increase_food') {
-        const foodId = String(args.foodId || '');
-        const found = safeInventory.find(
-          (i) => i.id === foodId || i.name.toLowerCase() === String(args.foodName || '').toLowerCase()
-        );
-        if (!found) {
-          return { error: `Could not find "${args.foodName}" in inventory.` };
-        }
-        const amountAdded = Number(args.amountAdded || 0);
-        const unit = String(args.unit || found.unit);
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'increase_food',
-          title: `Add ${amountAdded} ${unit} to ${found.name}`,
-          description: `Increase ${found.name} from ${found.quantity} ${found.unit} by ${amountAdded} ${unit}.`,
-          requiresConfirmation: true,
-          payload: { foodId: found.id, foodName: found.name, amountAdded, unit },
-        });
-        return { queuedForConfirmation: true, actionId };
-      }
-
-      if (name === 'propose_update_food') {
-        const foodId = String(args.foodId || '');
-        const found = safeInventory.find(
-          (i) => i.id === foodId || i.name.toLowerCase() === String(args.foodName || '').toLowerCase()
-        );
-        if (!found) {
-          return { error: `Could not find "${args.foodName}" in inventory.` };
-        }
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'update_food',
-          title: `Update ${found.name}`,
-          description: `Modify details for ${found.name}.`,
-          requiresConfirmation: true,
-          payload: {
-            foodId: found.id,
-            foodName: found.name,
-            newName: args.newName,
-            location: args.location,
-            expiryDate: args.expiryDate,
-            category: args.category,
-            notes: args.notes,
-          },
-        });
-        return { queuedForConfirmation: true, actionId };
-      }
-
-      if (name === 'propose_delete_food') {
-        const foodId = String(args.foodId || '');
-        const found = safeInventory.find(
-          (i) => i.id === foodId || i.name.toLowerCase() === String(args.foodName || '').toLowerCase()
-        );
-        if (!found) {
-          return { error: `Could not find "${args.foodName}" in inventory.` };
-        }
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'delete_food',
-          title: `Delete ${found.name}`,
-          description: `Permanently remove ${found.name} (${found.quantity} ${found.unit}) from your inventory.${args.reason ? ` Reason: ${String(args.reason)}` : ''}`,
-          requiresConfirmation: true,
-          payload: { foodId: found.id, foodName: found.name, reason: args.reason || '' },
-        });
-        return { queuedForConfirmation: true, actionId };
-      }
-
-      if (name === 'propose_create_donation') {
-        const expiryDate = String(args.expiryDate || todayStr);
-        if (daysBetween(expiryDate, todayStr) < 0) {
-          return {
-            error:
-              'Safety Check Blocked: Expired food cannot be listed for donation. Please advise the user not to donate or consume expired food.',
-          };
-        }
-        const foodName = String(args.foodName || '').trim();
-        const qty = Number(args.quantity || 1);
-        const unit = String(args.unit || 'pcs');
-        const matched = safeInventory.find(
-          (i) => i.id === args.foodId || i.name.toLowerCase() === foodName.toLowerCase()
-        );
-        if (matched && daysBetween(matched.expiryDate, todayStr) < 0) {
-          return {
-            error: `Safety Check Blocked: ${matched.name} expired on ${matched.expiryDate} and cannot be donated.`,
-          };
-        }
-
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'create_donation',
-          title: `Publish Donation: ${foodName}`,
-          description: `List ${qty} ${unit} of ${foodName} (expires ${expiryDate}) on the Charity Dashboard.`,
-          requiresConfirmation: true,
-          payload: {
-            foodId: matched?.id || 'standalone',
-            foodName,
-            quantity: qty,
-            unit,
-            category: String(args.category || matched?.category || 'Other'),
-            expiryDate,
-            pickupLocation: String(args.pickupLocation || 'Home Porch / Community Dropoff'),
-            contactInfo: String(args.contactInfo || 'Available via Zero Crumbs account'),
-            notes: String(args.notes || 'Sealed and safe surplus food'),
-          },
-        });
-        return { queuedForConfirmation: true, actionId };
-      }
-
-      if (name === 'propose_update_donation_status') {
-        const donationId = String(args.donationId || '');
-        const found = safeDonations.find(
-          (d) =>
-            d.id === donationId ||
-            d.foodName.toLowerCase() === String(args.foodName || '').toLowerCase()
-        );
-        if (!found) {
-          return { error: `Could not find donation listing for "${args.foodName}".` };
-        }
-        if (found.status === 'Donated' || found.status === 'Cancelled') {
-          return { error: `This donation is already ${found.status} and cannot be changed.` };
-        }
-        const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        pendingActions.push({
-          actionId,
-          type: 'update_donation_status',
-          title: `Update Donation: ${found.foodName} → ${args.newStatus}`,
-          description: `Change status of ${found.foodName} from ${found.status} to ${args.newStatus}.`,
-          requiresConfirmation: true,
-          payload: {
-            donationId: found.id,
-            foodName: found.foodName,
-            newStatus: String(args.newStatus),
-            charityPartner: args.charityPartner || found.charityPartner || '',
-          },
-        });
-        return { queuedForConfirmation: true, actionId };
-      }
-
-      return { error: `Unknown tool: ${name}` };
-    }
+    const toolExecutor = createZeroCrumbsToolExecutor({
+      inventory: safeInventory,
+      donations: safeDonations,
+      profile,
+      todayStr,
+    });
+    const executeLocalTool = toolExecutor.executeLocalTool;
+    const toolDeclarations = ZERO_CRUMBS_TOOL_DECLARATIONS;
 
     const formattedHistory = (Array.isArray(history) ? history.slice(-10) : [])
       .filter((h) => typeof h?.text === 'string' && h.text.trim().length > 0)
@@ -1210,6 +719,8 @@ CORE RULES:
       });
     }
 
+    const pendingActions = toolExecutor.getAllPendingActions();
+
     if (!finalReplyText) {
       finalReplyText =
         pendingActions.length > 0
@@ -1294,6 +805,107 @@ CORE RULES:
     res.status(500).json({
       error: 'Zero Crumbs AI could not complete that request right now. Please tap Retry.',
       retryable: true,
+    });
+  }
+});
+
+// Speech-to-text transcription fallback for browsers without Web Speech Recognition (e.g., Firefox)
+app.post('/api/ai/transcribe', requireAuth, async (req, res) => {
+  try {
+    const { audioBase64, mimeType } = req.body as {
+      audioBase64?: string;
+      mimeType?: string;
+    };
+
+    if (!audioBase64 || typeof audioBase64 !== 'string' || audioBase64.trim().length < 16) {
+      res.status(400).json({ error: 'No recorded audio was received. Please speak and try again.' });
+      return;
+    }
+
+    if (audioBase64.length > 5 * 1024 * 1024) {
+      res.status(413).json({ error: 'Voice recording is too long. Please keep each message under 45 seconds.' });
+      return;
+    }
+
+    const rawMime = typeof mimeType === 'string' ? mimeType.split(';')[0].trim().toLowerCase() : 'audio/webm';
+    const allowedMimes = new Set([
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg',
+      'audio/wav',
+      'audio/mpeg',
+      'audio/aac',
+    ]);
+    const safeMime = allowedMimes.has(rawMime) ? rawMime : 'audio/webm';
+
+    const ai = getGeminiClient();
+    const models = ['gemini-3.5-transcribe', 'gemini-4-hydrogen'];
+    let lastError: unknown = null;
+
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: safeMime,
+                  data: audioBase64.trim(),
+                },
+              },
+              {
+                text: 'Transcribe the spoken user speech accurately into plain text. Return only the spoken words with no commentary or quotes. If there is only silence or background noise, return an empty string.',
+              },
+            ],
+          },
+        });
+        const transcript = (response.text || '').trim();
+        res.json({ transcript, model });
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError;
+  } catch (err) {
+    console.error('AI transcribe error:', err);
+    const raw = err instanceof Error ? err.message : String(err || '');
+    const lower = raw.toLowerCase();
+
+    if (raw.includes('GEMINI_API_KEY is not configured')) {
+      res.status(503).json({
+        error:
+          'GEMINI_API_KEY is missing on the server. Add your Gemini API key in Google AI Studio Settings > Secrets (as GEMINI_API_KEY).',
+        missingApiKey: true,
+      });
+      return;
+    }
+
+    if (
+      lower.includes('permission_denied') ||
+      lower.includes('api_key_invalid') ||
+      lower.includes('api key not valid') ||
+      lower.includes('403')
+    ) {
+      res.status(403).json({
+        error:
+          'The Gemini API key appears invalid or lacks permission. Please verify GEMINI_API_KEY in Google AI Studio Settings > Secrets.',
+        missingApiKey: true,
+      });
+      return;
+    }
+
+    if (lower.includes('429') || lower.includes('resource_exhausted') || lower.includes('quota')) {
+      res.status(429).json({
+        error: 'Speech transcription reached a temporary rate limit. Please wait a moment and try again.',
+      });
+      return;
+    }
+
+    res.status(502).json({
+      error: 'Could not transcribe your voice recording right now. Please try speaking again.',
     });
   }
 });
@@ -1697,6 +1309,377 @@ app.post('/api/maps/nearby-charities', requireAuth, async (req, res) => {
   }
 });
 
+const ALLOWED_LIVE_VOICES = new Set(['Zephyr', 'Kore', 'Puck', 'Charon', 'Fenrir']);
+
+function formatLiveError(err: unknown): { message: string; missingApiKey: boolean } {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  const lower = raw.toLowerCase();
+
+  if (raw.includes('GEMINI_API_KEY is not configured')) {
+    return {
+      message:
+        'GEMINI_API_KEY is missing on the server. Add your Gemini API key in Google AI Studio Settings > Secrets (as GEMINI_API_KEY), then try voice again.',
+      missingApiKey: true,
+    };
+  }
+  if (
+    lower.includes('permission_denied') ||
+    lower.includes('api_key_invalid') ||
+    lower.includes('api key not valid') ||
+    lower.includes('403')
+  ) {
+    return {
+      message:
+        'The Gemini API key appears invalid or lacks permission. Please verify GEMINI_API_KEY in Google AI Studio Settings > Secrets.',
+      missingApiKey: true,
+    };
+  }
+  if (lower.includes('404') || lower.includes('not_found')) {
+    return {
+      message:
+        'Gemini Live streaming endpoint returned 404 (not found or unsupported for this API version/model).',
+      missingApiKey: false,
+    };
+  }
+  if (lower.includes('429') || lower.includes('resource_exhausted') || lower.includes('quota')) {
+    return {
+      message:
+        'Zero Crumbs AI Voice reached a temporary rate limit. Please wait a few seconds and try again.',
+      missingApiKey: false,
+    };
+  }
+  return {
+    message: raw
+      ? `Zero Crumbs AI Voice connection failed: ${raw.slice(0, 180)}`
+      : 'Zero Crumbs AI Voice encountered a connection issue. Please try starting voice again.',
+    missingApiKey: false,
+  };
+}
+
+function attachLiveVoiceWebSocket(server: http.Server) {
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
+
+  server.on('upgrade', (request, socket, head) => {
+    try {
+      const reqUrl = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+      if (reqUrl.pathname === '/api/ai/live') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+        return;
+      }
+    } catch {
+      // Ignore malformed upgrade URLs
+    }
+    socket.destroy();
+  });
+
+  wss.on('connection', (clientWs: WebSocket) => {
+    let initialized = false;
+    let closed = false;
+    let session: Session | null = null;
+    let toolExecutor: ReturnType<typeof createZeroCrumbsToolExecutor> | null = null;
+
+    const sendToClient = (payload: Record<string, unknown>) => {
+      if (!closed && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify(payload));
+      }
+    };
+
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      clearTimeout(authTimer);
+      if (session) {
+        try {
+          session.close();
+        } catch {
+          // Ignore close failure
+        }
+        session = null;
+      }
+    };
+
+    const authTimer = setTimeout(() => {
+      if (!initialized && !closed) {
+        sendToClient({ type: 'error', error: 'Authentication handshake timed out.' });
+        clientWs.close(4001, 'Authentication timeout');
+        cleanup();
+      }
+    }, 10000);
+
+    clientWs.on('close', cleanup);
+    clientWs.on('error', cleanup);
+
+    clientWs.on('message', async (rawData) => {
+      if (closed) return;
+
+      let msg: Record<string, unknown>;
+      try {
+        msg = JSON.parse(rawData.toString()) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+
+      const msgType = typeof msg.type === 'string' ? msg.type : '';
+
+      if (!initialized) {
+        if (msgType !== 'init') {
+          sendToClient({ type: 'error', error: 'Authentication required before streaming audio.' });
+          clientWs.close(4001, 'Authentication required');
+          cleanup();
+          return;
+        }
+
+        const idToken = typeof msg.idToken === 'string' ? msg.idToken : '';
+        const authUser = await verifyFirebaseIdToken(idToken);
+        if (!authUser) {
+          sendToClient({ type: 'error', error: 'Authentication required. Please sign in to use voice.' });
+          clientWs.close(4001, 'Invalid token');
+          cleanup();
+          return;
+        }
+
+        const otpVerified = await isUserOtpVerified(authUser);
+        if (!otpVerified) {
+          sendToClient({
+            type: 'error',
+            error: 'Please verify your email address via Email OTP before using Zero Crumbs AI Voice.',
+          });
+          clientWs.close(4003, 'Email verification required');
+          cleanup();
+          return;
+        }
+
+        if (!isGeminiKeyConfigured()) {
+          sendToClient({
+            type: 'error',
+            missingApiKey: true,
+            error:
+              'GEMINI_API_KEY is missing on the server. Add your Gemini API key in Google AI Studio Settings > Secrets (as GEMINI_API_KEY), then tap Try Again.',
+          });
+          clientWs.close(4503, 'Missing API key');
+          cleanup();
+          return;
+        }
+
+        clearTimeout(authTimer);
+        initialized = true;
+
+        const todayStr =
+          typeof msg.currentDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(msg.currentDate)
+            ? msg.currentDate
+            : new Date().toISOString().slice(0, 10);
+
+        const inventory = Array.isArray(msg.inventory)
+          ? (msg.inventory as InventorySnapshotItem[])
+          : [];
+        const donations = Array.isArray(msg.donations)
+          ? (msg.donations as DonationSnapshotItem[])
+          : [];
+        const profile =
+          msg.profile && typeof msg.profile === 'object'
+            ? (msg.profile as UserProfileSnapshot)
+            : {};
+
+        const requestedVoice = typeof msg.voiceName === 'string' ? msg.voiceName : 'Zephyr';
+        const voiceName = ALLOWED_LIVE_VOICES.has(requestedVoice) ? requestedVoice : 'Zephyr';
+
+        toolExecutor = createZeroCrumbsToolExecutor({
+          inventory,
+          donations,
+          profile,
+          todayStr,
+        });
+
+        const systemInstruction = buildZeroCrumbsSystemInstruction({
+          todayStr,
+          profile,
+          voiceMode: true,
+        });
+
+        try {
+          const ai = getGeminiLiveClient();
+          const activeExecutor = toolExecutor;
+          let readySent = false;
+          const emitReady = () => {
+            if (!readySent && !closed) {
+              readySent = true;
+              sendToClient({ type: 'ready', model: 'gemini-3.8-live', voiceName });
+            }
+          };
+
+          const liveSession = await ai.live.connect({
+            model: 'gemini-3.8-live',
+            config: {
+              responseModalities: [Modality.AUDIO],
+              speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName } },
+              },
+              inputAudioTranscription: {},
+              outputAudioTranscription: {},
+              systemInstruction,
+              tools: [{ functionDeclarations: ZERO_CRUMBS_TOOL_DECLARATIONS as never }],
+            },
+            callbacks: {
+              onopen: () => {
+                // Wait for setupComplete or confirm ready once connect resolves
+              },
+              onmessage: (liveMessage: LiveServerMessage) => {
+                if (closed) return;
+
+                if (liveMessage.setupComplete) {
+                  emitReady();
+                }
+
+                const serverContent = liveMessage.serverContent;
+                if (serverContent) {
+                  if (serverContent.interrupted) {
+                    sendToClient({ type: 'interrupted' });
+                  }
+
+                  if (serverContent.inputTranscription?.text) {
+                    sendToClient({
+                      type: 'inputTranscript',
+                      text: serverContent.inputTranscription.text,
+                    });
+                  }
+
+                  if (serverContent.outputTranscription?.text) {
+                    sendToClient({
+                      type: 'outputTranscript',
+                      text: serverContent.outputTranscription.text,
+                    });
+                  }
+
+                  for (const part of serverContent.modelTurn?.parts ?? []) {
+                    if (part.inlineData?.data) {
+                      sendToClient({ type: 'audio', data: part.inlineData.data });
+                    }
+                  }
+
+                  if (serverContent.turnComplete) {
+                    sendToClient({ type: 'turnComplete' });
+                  }
+                }
+
+                const functionCalls = liveMessage.toolCall?.functionCalls;
+                if (functionCalls && functionCalls.length > 0 && session) {
+                  const functionResponses = functionCalls.map((call) => {
+                    const result = activeExecutor.executeLocalTool(
+                      call.name || '',
+                      (call.args as Record<string, unknown>) || {}
+                    );
+                    return {
+                      ...(call.id ? { id: call.id } : {}),
+                      name: call.name || 'tool',
+                      response: result,
+                    };
+                  });
+
+                  const proposed = activeExecutor.takePendingActions();
+                  if (proposed.length > 0) {
+                    sendToClient({ type: 'pendingActions', actions: proposed });
+                  }
+
+                  try {
+                    session.sendToolResponse({ functionResponses });
+                  } catch (toolErr) {
+                    console.error('Failed to send tool response to Live session:', toolErr);
+                  }
+                }
+              },
+              onerror: (errEvent) => {
+                if (closed) return;
+                const formatted = formatLiveError(
+                  (errEvent as { error?: unknown; message?: string })?.error ||
+                    (errEvent as { message?: string })?.message ||
+                    'Live API error'
+                );
+                sendToClient({
+                  type: 'error',
+                  error: formatted.message,
+                  missingApiKey: formatted.missingApiKey,
+                });
+              },
+              onclose: () => {
+                if (!closed) {
+                  sendToClient({ type: 'sessionClosed' });
+                  clientWs.close(1000, 'Live session ended');
+                  cleanup();
+                }
+              },
+            },
+          });
+
+          if (closed) {
+            liveSession.close();
+            return;
+          }
+
+          session = liveSession;
+          emitReady();
+        } catch (err) {
+          console.error('Failed to connect Gemini Live session:', err);
+          const formatted = formatLiveError(err);
+          sendToClient({
+            type: 'error',
+            error: formatted.message,
+            missingApiKey: formatted.missingApiKey,
+          });
+          clientWs.close(1011, 'Gemini Live setup failed');
+          cleanup();
+        }
+        return;
+      }
+
+      if (!session) return;
+
+      if (msgType === 'audio' && typeof msg.data === 'string' && msg.data.length > 0) {
+        try {
+          session.sendRealtimeInput({
+            audio: { data: msg.data, mimeType: 'audio/pcm;rate=16000' },
+          });
+        } catch {
+          // Ignore send after close
+        }
+      } else if (msgType === 'audioStreamEnd') {
+        try {
+          session.sendRealtimeInput({ audioStreamEnd: true });
+        } catch {
+          // Ignore send after close
+        }
+      } else if (msgType === 'text' && typeof msg.text === 'string' && msg.text.trim().length > 0) {
+        try {
+          session.sendRealtimeInput({ text: msg.text.trim() });
+        } catch {
+          // Ignore send after close
+        }
+      } else if (msgType === 'contextUpdate' && toolExecutor) {
+        toolExecutor.updateSnapshot({
+          inventory: Array.isArray(msg.inventory)
+            ? (msg.inventory as InventorySnapshotItem[])
+            : undefined,
+          donations: Array.isArray(msg.donations)
+            ? (msg.donations as DonationSnapshotItem[])
+            : undefined,
+          profile:
+            msg.profile && typeof msg.profile === 'object'
+              ? (msg.profile as UserProfileSnapshot)
+              : undefined,
+          todayStr:
+            typeof msg.currentDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(msg.currentDate)
+              ? msg.currentDate
+              : undefined,
+        });
+      } else if (msgType === 'close') {
+        clientWs.close(1000, 'Client closed voice conversation');
+        cleanup();
+      }
+    });
+  });
+}
+
 async function startServer() {
   const port = Number(process.env.PORT) || 3000;
   const isProd = process.env.NODE_ENV === 'production';
@@ -1716,7 +1699,10 @@ async function startServer() {
     });
   }
 
-  app.listen(port, '0.0.0.0', () => {
+  const server = http.createServer(app);
+  attachLiveVoiceWebSocket(server);
+
+  server.listen(port, '0.0.0.0', () => {
     console.log(`Zero Crumbs server running on http://0.0.0.0:${port}`);
   });
 }
