@@ -1203,7 +1203,7 @@ export function ProfileSettingsView({
                           ? 'Checking server email configuration...'
                           : emailServiceStatus.configured
                             ? `Ready to email summaries to ${accountEmail}.`
-                            : 'Requires server email delivery configuration (APPS_SCRIPT_EMAIL_URL or RESEND_API_KEY).'}
+                            : 'Email expiry summaries are temporarily unavailable right now.'}
                       </p>
                     </div>
                     <input

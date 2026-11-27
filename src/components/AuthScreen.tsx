@@ -146,12 +146,28 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [needsConsoleEmailSetup, setNeedsConsoleEmailSetup] = useState(false);
-  const [needsEmailDeliverySetup, setNeedsEmailDeliverySetup] = useState(false);
+  const [emailOtpAvailable, setEmailOtpAvailable] = useState<boolean | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailOtpConfirmOpen, setGmailOtpConfirmOpen] = useState(false);
 
   useEffect(() => {
     return subscribeGmailConnection(setGmailConnected);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/otp-status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { configured?: boolean } | null) => {
+        if (!active || !data || typeof data.configured !== 'boolean') return;
+        setEmailOtpAvailable(data.configured);
+      })
+      .catch(() => {
+        // Keep null if status check fails; send-otp endpoint handles errors cleanly
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -166,21 +182,18 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
     setResendSeconds(0);
     setErrorMsg('');
     setInfoMsg('');
-    setNeedsEmailDeliverySetup(false);
   }, [unverifiedUser?.uid]);
 
   function resetNotices() {
     setErrorMsg('');
     setInfoMsg('');
     setNeedsConsoleEmailSetup(false);
-    setNeedsEmailDeliverySetup(false);
   }
 
   function clearOtpFlow() {
     setPendingOtpSignup(null);
     setOtpCode('');
     setResendSeconds(0);
-    setNeedsEmailDeliverySetup(false);
   }
 
   function mapAuthError(err: unknown): string {
@@ -264,13 +277,20 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
         clearGmailAccessToken();
       }
       if (data.missingEmailService) {
-        setNeedsEmailDeliverySetup(true);
+        setEmailOtpAvailable(false);
       }
       if (typeof data.retryAfterSeconds === 'number' && data.retryAfterSeconds > 0) {
         setResendSeconds((prev) => Math.max(prev, data.retryAfterSeconds || 0));
       }
-      throw new Error(data.error || 'Could not send verification OTP email.');
+      throw new Error(
+        data.error ||
+          (data.missingEmailService
+            ? 'Email verification is temporarily unavailable right now. Please try again in a few minutes or continue with Google.'
+            : 'Could not send verification OTP email.')
+      );
     }
+
+    setEmailOtpAvailable(true);
 
     setResendSeconds(data.resendCooldownSeconds || 30);
     return {
@@ -654,15 +674,10 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
             </div>
           )}
 
-          {needsEmailDeliverySetup && (
-            <div className="p-4 rounded-xl bg-[#FBF4E9] dark:bg-[#2C2214] border border-[#E7D4B5] dark:border-[#5C4421] text-xs text-[#614721] dark:text-[#FCD34D] space-y-1.5">
-              <p className="font-semibold">Email OTP delivery needs server configuration:</p>
-              <p>
-                Add <code className="font-mono">APPS_SCRIPT_EMAIL_URL</code> (free Google Apps
-                Script MailApp) or <code className="font-mono">RESEND_API_KEY</code> +{' '}
-                <code className="font-mono">REMINDER_FROM_EMAIL</code> in Google AI Studio{' '}
-                <strong>Settings → Secrets</strong>, then restart the server.
-              </p>
+          {emailOtpAvailable === false && !gmailConnected && !errorMsg && (
+            <div className="p-3.5 rounded-xl bg-[#F4F5F2] dark:bg-[#131C17] border border-[#DCE0D8] dark:border-[#27362E] text-xs text-[#4F5E55] dark:text-[#9CB0A4]">
+              Email verification codes are temporarily unavailable right now. You can use Google
+              sign-in below to send your verification code or try again shortly.
             </div>
           )}
 
@@ -1006,16 +1021,10 @@ export function AuthScreen({ unverifiedUser, onVerifiedRefresh }: AuthScreenProp
                 </div>
               )}
 
-              {needsEmailDeliverySetup && (
-                <div className="mb-5 p-4 rounded-xl bg-[#FBF4E9] dark:bg-[#2C2214] border border-[#E7D4B5] dark:border-[#5C4421] text-xs text-[#614721] dark:text-[#FCD34D] space-y-1.5">
-                  <p className="font-semibold">Free Email OTP Delivery Setup Required:</p>
-                  <p>
-                    Configure <code className="font-mono">APPS_SCRIPT_EMAIL_URL</code> (free Google
-                    Apps Script <code className="font-mono">MailApp</code>) or{' '}
-                    <code className="font-mono">RESEND_API_KEY</code> +{' '}
-                    <code className="font-mono">REMINDER_FROM_EMAIL</code> in Google AI Studio{' '}
-                    <strong>Settings → Secrets</strong> so real OTP emails can be sent.
-                  </p>
+              {mode === 'signup' && emailOtpAvailable === false && !errorMsg && (
+                <div className="mb-5 p-3.5 rounded-xl bg-[#F4F5F2] dark:bg-[#131C17] border border-[#DCE0D8] dark:border-[#27362E] text-xs text-[#4F5E55] dark:text-[#9CB0A4]">
+                  Email verification is temporarily unavailable right now. Please try again in a
+                  few minutes, or continue instantly with Google below.
                 </div>
               )}
 

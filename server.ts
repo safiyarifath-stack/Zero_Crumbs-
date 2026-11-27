@@ -467,7 +467,6 @@ app.get('/api/reminders/status', requireAuth, (_req, res) => {
   res.json({
     emailConfigured: delivery.configured,
     provider: delivery.provider,
-    missingEnv: delivery.missingEnv,
   });
 });
 
@@ -484,9 +483,7 @@ app.post('/api/reminders/send-email', requireAuth, async (req, res) => {
   const delivery = getEmailDeliveryStatus();
   if (!delivery.configured) {
     res.status(503).json({
-      error:
-        'Email reminder service is not connected yet. Configure APPS_SCRIPT_EMAIL_URL (free Google Apps Script MailApp) or RESEND_API_KEY and REMINDER_FROM_EMAIL in Settings > Secrets.',
-      missingEnv: delivery.missingEnv,
+      error: 'Email reminder delivery is temporarily unavailable right now.',
     });
     return;
   }

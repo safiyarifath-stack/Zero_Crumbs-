@@ -373,7 +373,7 @@ export function ExpiringDashboard({
                     ? 'No email address linked to this account. Use Browser Push Notifications above.'
                     : emailStatus.emailConfigured
                       ? `Connected and ready for ${profile?.email || auth.currentUser?.email}.`
-                      : 'Requires server email delivery secrets (APPS_SCRIPT_EMAIL_URL or RESEND_API_KEY) in Settings > Secrets.'}
+                      : 'Email expiry reminders are temporarily unavailable right now.'}
               </p>
             </div>
             <div className="flex items-center gap-2">
