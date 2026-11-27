@@ -9,7 +9,7 @@ import {
   EmailOtpService,
   getEmailDeliveryStatus,
   type OtpPurpose,
-} from './server/emailOtpService';
+} from './server/emailOtpService.ts';
 
 dotenv.config();
 
@@ -1698,7 +1698,7 @@ app.post('/api/maps/nearby-charities', requireAuth, async (req, res) => {
 });
 
 async function startServer() {
-  const port = 3000;
+  const port = Number(process.env.PORT) || 3000;
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
